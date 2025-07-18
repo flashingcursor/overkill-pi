@@ -30,7 +30,7 @@ Professional media center configuration tool for Raspberry Pi 5, featuring aggre
 
 ```bash
 # Download and run bootstrap script
-curl -sSL https://raw.githubusercontent.com/flashingcursor/overkill-pi/main/overkill-bootstrap.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/flashingcursor/overkill-pi/master/overkill-bootstrap.sh | sudo bash
 
 # Or clone and install locally
 git clone https://github.com/flashingcursor/overkill-pi
