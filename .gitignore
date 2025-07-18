@@ -1,0 +1,70 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+htmlcov/
+.hypothesis/
+
+# Logs
+*.log
+logs/
+
+# Local development
+.env
+.env.local
+
+# OVERKILL specific
+CLAUDE.md
+todo/
+TODO/
+silicon_grade.json
+*.backup
+*.pre-overkill
+
+# System
+.DS_Store
+Thumbs.db
+
+# Documentation build
+docs/_build/
+docs/_static/
+docs/_templates/

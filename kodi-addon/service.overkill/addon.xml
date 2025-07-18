@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="service.overkill" name="OVERKILL Configuration" version="1.0.0" provider-name="OVERKILL Team">
+    <requires>
+        <import addon="xbmc.python" version="3.0.0"/>
+        <import addon="script.module.requests" version="2.25.1"/>
+    </requires>
+    
+    <extension point="xbmc.service" library="service.py">
+        <provides>service</provides>
+    </extension>
+    
+    <extension point="xbmc.python.pluginsource" library="default.py">
+        <provides>executable</provides>
+    </extension>
+    
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">OVERKILL Configuration Service</summary>
+        <description lang="en_GB">Configure OVERKILL settings from within Kodi. Monitor system temperature, adjust overclock profiles, and manage thermal settings without leaving your media center.</description>
+        <disclaimer lang="en_GB">This addon can modify system settings. Use at your own risk!</disclaimer>
+        <platform>linux</platform>
+        <license>MIT</license>
+        <forum>https://github.com/flashingcursor/overkill-pi/discussions</forum>
+        <source>https://github.com/flashingcursor/overkill-pi</source>
+        <assets>
+            <icon>icon.png</icon>
+            <fanart>fanart.jpg</fanart>
+        </assets>
+    </extension>
+</addon>
