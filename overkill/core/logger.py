@@ -15,7 +15,6 @@ class OverkillLogger:
     def __init__(self, name: str = "overkill", log_dir: Optional[Path] = None):
         self.name = name
         self.log_dir = log_dir or Path("/var/log/overkill")
-        self.log_dir.mkdir(parents=True, exist_ok=True)
         
         # Create logger
         self.logger = logging.getLogger(name)
@@ -33,19 +32,22 @@ class OverkillLogger:
         console_handler.setLevel(logging.INFO)
         console_format = logging.Formatter("%(message)s")
         console_handler.setFormatter(console_format)
-        
-        # File handler for detailed logs
-        log_file = self.log_dir / f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setLevel(logging.DEBUG)
-        file_format = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
-        )
-        file_handler.setFormatter(file_format)
-        
-        # Add handlers
         self.logger.addHandler(console_handler)
-        self.logger.addHandler(file_handler)
+        
+        # Try to create file handler if we have permissions
+        try:
+            self.log_dir.mkdir(parents=True, exist_ok=True)
+            log_file = self.log_dir / f"{name}_{datetime.now().strftime('%Y%m%d')}.log"
+            file_handler = logging.FileHandler(log_file)
+            file_handler.setLevel(logging.DEBUG)
+            file_format = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s'
+            )
+            file_handler.setFormatter(file_format)
+            self.logger.addHandler(file_handler)
+        except PermissionError:
+            # If we can't create log directory, just use console output
+            pass
     
     def get_logger(self) -> logging.Logger:
         """Get the configured logger instance"""

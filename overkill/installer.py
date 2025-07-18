@@ -44,7 +44,7 @@ class OverkillInstaller:
         
     def show_banner(self):
         """Show OVERKILL banner with MAXIMUM ENTHUSIASM"""
-        banner = """[red]
+        banner = '''[red]
         ....            _                                       ..         .          ..       .. 
     .x~X88888Hx.       u                                  < .z@8"`        @88>  x .d88"  x .d88"  
    H8X 888888888h.    88Nu.   u.                .u    .    !@88E          %8P    5888R    5888R   
@@ -57,7 +57,7 @@ class OverkillInstaller:
 :"""8888888x..  .x     ^Y8888*""  '8888c. .+  ^"8888*"      888E  9888.   888&   .888B .  .888B . 
 `    `*888888888"        `Y"       "88888%       "Y"      '"888*" 4888"   R888"  ^*888%   ^*888%  
         ""***""                      "YP'                    ""    ""      ""      "%       "%    
-[/red]"""
+[/red]'''
         
         console.print(Panel(banner, style="red", border_style="red"))
         console.print("[cyan]    Version 3.0.0 - Raspberry Pi 5 Media Center DOMINATION[/cyan]")

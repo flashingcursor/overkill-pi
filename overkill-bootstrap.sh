@@ -118,36 +118,31 @@ setup_python_environment() {
 install_overkill() {
     log "Installing OVERKILL Python application..."
     
-    # For development, copy from current directory
-    if [[ -d "./overkill" ]]; then
+    # Activate virtual environment for installation
+    source "$OVERKILL_HOME/venv/bin/activate"
+    
+    # For development, install from current directory
+    if [[ -f "./setup.py" ]] && [[ -d "./overkill" ]]; then
         log "Installing from local directory..."
-        cp -r ./overkill/* "$OVERKILL_HOME/"
-        cd "$OVERKILL_HOME"
+        pip install -e .
     else
         # For production, clone from repository
         log "Cloning from repository..."
-        git clone -b "$OVERKILL_BRANCH" "$OVERKILL_REPO" "$OVERKILL_HOME/temp"
-        mv "$OVERKILL_HOME/temp"/* "$OVERKILL_HOME/"
-        rm -rf "$OVERKILL_HOME/temp"
-        cd "$OVERKILL_HOME"
-    fi
-    
-    # Install Python requirements
-    if [[ -f "requirements.txt" ]]; then
-        pip install -r requirements.txt
-    else
-        # Install basic requirements if requirements.txt doesn't exist
-        pip install \
-            click \
-            rich \
-            pyyaml \
-            psutil \
-            requests
-    fi
-    
-    # Install the package
-    if [[ -f "setup.py" ]]; then
-        pip install -e .
+        local temp_dir="/tmp/overkill-install-$$"
+        git clone -b "$OVERKILL_BRANCH" "$OVERKILL_REPO" "$temp_dir"
+        cd "$temp_dir"
+        
+        # Install the package
+        pip install .
+        
+        # Copy any additional files needed
+        if [[ -d "kodi-addon" ]]; then
+            cp -r "kodi-addon" "$OVERKILL_HOME/"
+        fi
+        
+        # Cleanup
+        cd /
+        rm -rf "$temp_dir"
     fi
 }
 
@@ -201,7 +196,7 @@ main() {
     # Launch installer automatically
     echo
     echo -e "${CYAN}Launching OVERKILL installer...${NC}"
-    exec /opt/overkill/venv/bin/python -m overkill.installer
+    /usr/local/bin/overkill
 }
 
 # Run main function
