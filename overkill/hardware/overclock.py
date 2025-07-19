@@ -313,3 +313,93 @@ extraargs=cma=512M coherent_pool=2M
         }
         
         return cooling_profiles.get(cooling_type, "safe")
+    
+    def configure_gpu_v3d(self) -> bool:
+        """Configure GPU for V3D support on Pi 5"""
+        logger.info("Configuring GPU for V3D support...")
+        
+        try:
+            # Check for alternate config location
+            if not self.config_file.exists():
+                alt_config = Path("/boot/firmware/config.txt")
+                if alt_config.exists():
+                    self.config_file = alt_config
+            
+            # Read current config
+            with open(self.config_file, 'r') as f:
+                content = f.read()
+            
+            # Check if GPU config already exists
+            if "# OVERKILL GPU Configuration" not in content:
+                gpu_config = """
+# OVERKILL GPU Configuration
+# Enable V3D driver for Pi 5
+dtoverlay=vc4-kms-v3d-pi5
+gpu_mem=512
+max_framebuffers=2
+disable_fw_kms_setup=1
+"""
+                content += gpu_config
+                
+                if atomic_write(self.config_file, content):
+                    logger.info("GPU V3D configuration added")
+                    return True
+                else:
+                    logger.error("Failed to write GPU configuration")
+                    return False
+            else:
+                logger.info("GPU configuration already exists")
+                return True
+                
+        except Exception as e:
+            logger.error(f"Failed to configure GPU: {e}")
+            return False
+    
+    def configure_hdmi_cec_ir(self) -> bool:
+        """Configure HDMI CEC and IR support"""
+        logger.info("Configuring HDMI CEC and IR...")
+        
+        try:
+            # Check for alternate config location
+            if not self.config_file.exists():
+                alt_config = Path("/boot/firmware/config.txt")
+                if alt_config.exists():
+                    self.config_file = alt_config
+            
+            # Read current config
+            with open(self.config_file, 'r') as f:
+                content = f.read()
+            
+            # Add CEC configuration if not present
+            if "# OVERKILL CEC Configuration" not in content:
+                cec_config = """
+# OVERKILL CEC Configuration
+hdmi_force_hotplug=1
+hdmi_ignore_cec_init=1
+hdmi_cec_compliance=1
+cec_osd_name=OVERKILL
+"""
+                content += cec_config
+                logger.info("Added CEC configuration")
+            
+            # Add IR configuration if not present
+            if "# OVERKILL IR Configuration" not in content:
+                ir_config = """
+# OVERKILL IR Configuration
+dtoverlay=gpio-ir,gpio_pin=18
+dtparam=gpio_pin=18
+"""
+                content += ir_config
+                logger.info("Added IR configuration")
+            
+            # Write config
+            if atomic_write(self.config_file, content):
+                logger.info("HDMI CEC and IR configuration complete")
+                return True
+            else:
+                logger.error("Failed to write CEC/IR configuration")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to configure CEC/IR: {e}")
+            return False

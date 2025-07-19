@@ -305,22 +305,26 @@ class KodiBuilder:
         """Create systemd service for Kodi"""
         service_content = """[Unit]
 Description=OVERKILL Kodi Media Center
-After=multi-user.target network.target
+After=multi-user.target network.target sound.target
 
 [Service]
 Type=simple
 User=overkill
 Group=overkill
+# GPU access groups
+SupplementaryGroups=audio,video,input,render
 Environment="HOME=/home/overkill"
-Environment="DISPLAY=:0"
-ExecStartPre=/bin/sh -c 'until systemctl is-active graphical.target; do sleep 1; done'
-ExecStart=/usr/local/bin/kodi-standalone
+Environment="KODI_HOME=/opt/overkill/kodi/share/kodi"
+# Use GBM windowing for direct GPU access without X11
+Environment="WINDOWING=gbm"
+Environment="KODI_AE_SINK=ALSA"
+ExecStart=/opt/overkill/kodi/bin/kodi-standalone --windowing=gbm
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target
 """
         
         service_path = Path("/etc/systemd/system/kodi.service")

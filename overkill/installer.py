@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import getpass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, List, Tuple
 import click
@@ -428,6 +429,29 @@ To cancel the installation, press CTRL+C at any time.
         
         console.print("[green]Setting final permissions...[/green]")
         run_command(["chown", "-R", "overkill:overkill", "/home/overkill"])
+        
+        # Apply GPU configuration for V3D support
+        console.print("[green]Configuring GPU for V3D support...[/green]")
+        if self.overclock.configure_gpu_v3d():
+            console.print("[green]GPU V3D configuration applied[/green]")
+        else:
+            console.print("[yellow]GPU configuration failed - manual configuration may be needed[/yellow]")
+        
+        # Configure HDMI CEC and IR
+        console.print("[green]Configuring remote control (CEC/IR)...[/green]")
+        if self.overclock.configure_hdmi_cec_ir():
+            console.print("[green]Remote control configuration applied[/green]")
+        else:
+            console.print("[yellow]Remote control configuration incomplete[/yellow]")
+        
+        # Create initial config file to mark installation as complete
+        console.print("[green]Creating initial configuration...[/green]")
+        from .core.config import Config
+        config = Config()
+        config.set("installation.completed", True)
+        config.set("installation.date", datetime.now().isoformat())
+        config.set("installation.version", "3.0.0")
+        config.save()
         
         console.print("\n[red]🔥 OVERKILL INSTALLATION COMPLETE 🔥[/red]")
         console.print("\n[cyan]Run 'sudo overkill' to access the configuration interface[/cyan]")

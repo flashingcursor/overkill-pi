@@ -52,7 +52,21 @@ class PackageManager:
                 "libavutil-dev",
                 "libswscale-dev",
                 "libavfilter-dev",
-                "libavdevice-dev"
+                "libavdevice-dev",
+                # Mesa runtime drivers for V3D
+                "mesa-va-drivers",
+                "mesa-vdpau-drivers",
+                "mesa-vulkan-drivers",
+                "libgl1-mesa-dri",
+                "libglx-mesa0",
+                "libgles2-mesa",
+                "libgbm1",
+                # CEC and remote control
+                "cec-utils",
+                "libcec6",
+                "v4l-utils",
+                "lirc",
+                "ir-keytable"
             ],
             "kodi_build": [
                 "libgl1-mesa-dev",
@@ -94,7 +108,10 @@ class PackageManager:
                 "htop",
                 "ncdu",
                 "tmux",
-                "screen"
+                "screen",
+                # Pi firmware updates
+                "firmware-misc-nonfree",
+                "raspi-firmware"
             ],
             "network": [
                 "curl",
