@@ -60,10 +60,18 @@ check_root() {
 check_system() {
     log "Checking system compatibility..."
     
-    # Check for Pi 5
-    local model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
-    if [[ ! "$model" =~ "Raspberry Pi 5" ]]; then
+    # Check for Pi 5 using cpuinfo
+    local is_pi5=false
+    if grep -q "Raspberry Pi 5" /proc/cpuinfo 2>/dev/null; then
+        is_pi5=true
+    fi
+    
+    if [[ "$is_pi5" != "true" ]]; then
         warn "This is optimized for Raspberry Pi 5"
+        local model=$(grep "Model" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs)
+        if [[ -z "$model" ]]; then
+            model="Unknown device"
+        fi
         warn "Detected: $model"
         read -p "Continue anyway? (y/N): " -n 1 -r </dev/tty
         echo
