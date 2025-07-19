@@ -211,7 +211,6 @@ To cancel the installation, press CTRL+C at any time.
                 # getpass automatically uses /dev/tty when available
                 password = getpass.getpass("Enter a strong password for the 'overkill' user: ")
                 confirm = getpass.getpass("Confirm the password: ")
-                
                 if password == confirm and password:
                     break
                 else:
