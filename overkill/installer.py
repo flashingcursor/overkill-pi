@@ -3,6 +3,24 @@
 
 import os
 import sys
+
+# Set TTY font immediately before any output
+def _set_tty_font_early():
+    """Set TTY font before any imports that might produce output"""
+    try:
+        # Check if on physical console
+        tty = os.ttyname(0)
+        if tty.startswith("/dev/tty") and not tty.startswith("/dev/pts"):
+            # Apply large font for TV viewing
+            os.system("setfont /usr/share/consolefonts/Lat15-TerminusBold28x14.psf.gz 2>/dev/null || " +
+                     "setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || " +
+                     "setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null")
+    except:
+        pass
+
+# Apply font immediately
+_set_tty_font_early()
+
 import time
 import getpass
 from pathlib import Path
@@ -134,7 +152,7 @@ To cancel the installation, press CTRL+C at any time.
         
         # Check RAM
         memory_gb = self.system.get_memory_info()
-        if memory_gb >= 8:
+        if memory_gb >= 7:
             console.print("[green]8GB RAM detected - ABSOLUTELY MENTAL MODE[/green]")
         else:
             console.print(f"[yellow]Only {memory_gb:.0f}GB RAM - Overkill will still dominate[/yellow]")
@@ -149,14 +167,11 @@ To cancel the installation, press CTRL+C at any time.
     
     def set_tty_font(self):
         """Configure TTY for TV viewing"""
-        console.print("\n[red]▶▶▶ CONFIGURING TTY FOR TV VIEWING ◀◀◀[/red]")
-        console.print("[cyan]" + "═" * 60 + "[/cyan]")
-        
+        # Font is already set at script start, but ensure full configuration
         if self.tty_config.is_physical_console():
-            self.tty_config.configure_for_tv()
-            console.print("[green]TTY font optimized for TV viewing[/green]")
-        else:
-            console.print("[cyan]SSH session detected. Skipping TTY font adjustment.[/cyan]")
+            # Install font packages if needed and apply TV optimizations
+            self.tty_config.install_fonts()
+            self.tty_config.apply_tv_optimizations()
     
     def create_user(self):
         """Create OVERKILL user with FULL SYSTEM ACCESS"""
@@ -198,20 +213,54 @@ To cancel the installation, press CTRL+C at any time.
     
     def install_packages(self):
         """Install ALL PACKAGES FOR COMPLETE DOMINATION"""
-        console.print("\n[red]▶▶▶ INSTALLING COMPLETE DEPENDENCIES ◀◀◀[/red]")
+        console.print("\n[red]▶▶▶ INSTALLING SYSTEM DEPENDENCIES ◀◀◀[/red]")
         console.print("[cyan]" + "═" * 60 + "[/cyan]")
         
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            task = progress.add_task("Installing packages...", total=None)
-            
-            if self.package_manager.install_all_packages():
-                console.print("[green]All dependencies installed[/green]")
-            else:
-                console.print("[red]Failed to install some packages[/red]")
+        console.print("\n[yellow]This will install:[/yellow]")
+        console.print("  • Build tools and compilers")
+        console.print("  • Python development packages")
+        console.print("  • Media libraries (FFmpeg, etc)")
+        console.print("  • System monitoring tools")
+        console.print("  • Network utilities")
+        console.print("\n[cyan]This may take 10-15 minutes depending on your internet speed[/cyan]")
+        
+        # Update package list first
+        console.print("\n[green]Updating package database...[/green]")
+        if not self.package_manager.update_package_list():
+            console.print("[yellow]Warning: Package update failed, continuing anyway[/yellow]")
+        
+        # Install by category with clear progress
+        categories = [
+            ("build", "development tools"),
+            ("python", "Python packages"),
+            ("libraries", "system libraries"),
+            ("media", "media codecs"),
+            ("system", "monitoring tools"),
+            ("network", "network utilities")
+        ]
+        
+        failed_categories = []
+        
+        for category, description in categories:
+            console.print(f"\n[green]Installing {description}...[/green]")
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console
+            ) as progress:
+                task = progress.add_task(f"Installing {description}...", total=None)
+                
+                if not self.package_manager.install_category(category):
+                    failed_categories.append(category)
+                    console.print(f"[yellow]⚠️  Some {description} packages failed to install[/yellow]")
+                else:
+                    console.print(f"[green]✓ {description.capitalize()} installed successfully[/green]")
+        
+        if failed_categories:
+            console.print("\n[yellow]Some packages failed to install, but OVERKILL will continue.[/yellow]")
+            console.print("[yellow]You can install missing packages later if needed.[/yellow]")
+        else:
+            console.print("\n[green]✓ All dependencies installed successfully![/green]")
     
     def optimize_kernel(self):
         """KERNEL OPTIMIZATION - MAXIMUM PERFORMANCE"""
@@ -256,18 +305,28 @@ To cancel the installation, press CTRL+C at any time.
     
     def build_kodi(self):
         """BUILD KODI FROM SOURCE - OPTIMIZED FOR PI 5"""
-        console.print("\n[red]▶▶▶ BUILDING KODI FROM SOURCE ◀◀◀[/red]")
+        console.print("\n[red]▶▶▶ KODI MEDIA CENTER INSTALLATION ◀◀◀[/red]")
         console.print("[cyan]" + "═" * 60 + "[/cyan]")
         
-        console.print("[yellow]Building Kodi from source provides:[/yellow]")
+        console.print("\n[yellow]Building Kodi from source provides:[/yellow]")
         console.print("  • Latest stable release from GitHub")
         console.print("  • Pi 5 specific CPU optimizations (Cortex-A76)")
         console.print("  • Hardware-accelerated video decoding")
         console.print("  • Optimized for 8GB RAM configurations")
         console.print("  • Latest features and bug fixes")
-        console.print("\n[cyan]Build time: 45-80 minutes on Pi 5[/cyan]")
+        console.print("\n[cyan]⏱️  Estimated build time: 45-80 minutes on Pi 5[/cyan]")
+        console.print("[cyan]💾 Required disk space: ~10GB[/cyan]")
         
-        if click.confirm("\nBuild Kodi from source?"):
+        response = click.prompt(
+            "\n[KODI INSTALLATION]\n"
+            "1) Build from source (recommended for best performance)\n"
+            "2) Skip for now (can install later)\n"
+            "\nChoice", 
+            type=click.Choice(['1', '2']), 
+            default='2'
+        )
+        
+        if response == '1':
             builder = KodiBuilder()
             
             with Progress(
@@ -348,6 +407,7 @@ To cancel the installation, press CTRL+C at any time.
     
     def run(self):
         """Main installation flow"""
+        self.set_tty_font()
         if not is_root():
             console.print("[red]OVERKILL requires root for UNLIMITED POWER[/red]")
             sys.exit(1)
@@ -358,7 +418,9 @@ To cancel the installation, press CTRL+C at any time.
         
         console.clear()
         self.show_banner()
-        self.set_tty_font()
+        
+        # Complete TTY configuration (font already set at script start)
+
         
         console.print("\n[yellow]User agreement accepted. Preparing for ABSOLUTE DOMINATION...[/yellow]\n")
         time.sleep(2)

@@ -65,7 +65,7 @@ check_system() {
     if [[ ! "$model" =~ "Raspberry Pi 5" ]]; then
         warn "This is optimized for Raspberry Pi 5"
         warn "Detected: $model"
-        read -p "Continue anyway? (y/N): " -n 1 -r
+        read -p "Continue anyway? (y/N): " -n 1 -r </dev/tty
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             error "Installation cancelled"
@@ -179,7 +179,7 @@ main() {
     check_system
     
     echo -e "${CYAN}Ready to install OVERKILL Python Configurator?${NC}"
-    read -p "Continue? (y/N): " -n 1 -r
+    read -p "Continue? (y/N): " -n 1 -r </dev/tty
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         error "Installation cancelled"

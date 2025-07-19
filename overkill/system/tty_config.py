@@ -163,10 +163,11 @@ class TTYConfigurator:
         
         return False
     
-    def configure_for_tv(self) -> bool:
+    def configure_for_tv(self, silent: bool = False) -> bool:
         """Main method to configure TTY for TV viewing"""
         if not self.is_physical_console():
-            logger.info("Not on physical console, skipping TTY configuration")
+            if not silent:
+                logger.info("Not on physical console, skipping TTY configuration")
             return True
         
         # Install required packages

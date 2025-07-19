@@ -88,8 +88,21 @@ class OverclockManager:
             return OverclockResult(False, message, False)
         
         try:
+            # Check if config file exists
+            if not self.config_file.exists():
+                # Try alternate location
+                alt_config = Path("/boot/firmware/config.txt")
+                if alt_config.exists():
+                    self.config_file = alt_config
+                    logger.info(f"Using config file at {self.config_file}")
+                else:
+                    # Create new config file
+                    logger.warning(f"Config file not found at {self.config_file}, creating new one")
+                    self.config_file.parent.mkdir(parents=True, exist_ok=True)
+                    self.config_file.write_text("# Raspberry Pi configuration\n")
+            
             # Backup current config
-            if not backup_file(self.config_file):
+            if self.config_file.exists() and not backup_file(self.config_file):
                 return OverclockResult(False, "Failed to backup config.txt", False)
             
             # Read current config

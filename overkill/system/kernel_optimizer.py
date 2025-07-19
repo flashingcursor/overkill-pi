@@ -107,16 +107,29 @@ class KernelOptimizer:
         """Apply kernel parameters at runtime"""
         try:
             # Apply sysctl parameters
+            applied = 0
+            skipped = 0
+            
             for param, value in self.sysctl_params.items():
                 sysctl_path = f"/proc/sys/{param.replace('.', '/')}"
+                
+                # Check if parameter exists
+                if not Path(sysctl_path).exists():
+                    # Skip scheduler params that don't exist on newer kernels
+                    if "sched_" in param:
+                        skipped += 1
+                        continue
+                    logger.warning(f"Kernel parameter {param} not available")
+                    continue
                 
                 try:
                     with open(sysctl_path, 'w') as f:
                         f.write(value)
+                    applied += 1
                 except Exception as e:
                     logger.warning(f"Failed to set {param}: {e}")
             
-            logger.info("Applied runtime kernel parameters")
+            logger.info(f"Applied {applied} runtime kernel parameters ({skipped} not available)")
             return True
             
         except Exception as e:

@@ -100,13 +100,13 @@ class PackageManager:
                 "curl",
                 "wget",
                 "net-tools",
+                "iperf3"
+            ],
+            "optional": [
                 "nmap",
-                "iperf3",
                 "avahi-daemon",
                 "samba",
-                "samba-common-bin"
-            ],
-            "console": [
+                "samba-common-bin",
                 "fbset",
                 "console-setup",
                 "console-data"
@@ -124,29 +124,77 @@ class PackageManager:
         
         return True
     
+    def wait_for_dpkg_lock(self, max_wait: int = 300) -> bool:
+        """Wait for dpkg lock to be released"""
+        import time
+        start_time = time.time()
+        
+        while time.time() - start_time < max_wait:
+            # Check if dpkg is locked
+            ret1, _, _ = run_command(["fuser", "/var/lib/dpkg/lock-frontend"], timeout=5)
+            ret2, _, _ = run_command(["fuser", "/var/cache/debconf/config.dat"], timeout=5)
+            
+            if ret1 != 0 and ret2 != 0:
+                # No locks found
+                return True
+            
+            logger.info("Waiting for package manager lock to be released...")
+            time.sleep(5)
+        
+        return False
+    
     def install_packages(self, packages: List[str]) -> bool:
         """Install a list of packages"""
         if not packages:
             return True
         
+        # Wait for dpkg lock
+        if not self.wait_for_dpkg_lock():
+            logger.error("Package manager is locked by another process")
+            return False
+        
         logger.info(f"Installing {len(packages)} packages...")
         
-        cmd = ["apt-get", "install", "-y"] + packages
-        ret, stdout, err = run_command(cmd, timeout=600)
+        # Filter out already installed packages
+        to_install = []
+        for pkg in packages:
+            if not self.check_package_installed(pkg):
+                to_install.append(pkg)
+        
+        if not to_install:
+            logger.info("All packages already installed")
+            return True
+        
+        # Install with better error handling
+        cmd = ["apt-get", "install", "-y", "--no-install-recommends"] + to_install
+        ret, stdout, err = run_command(cmd, timeout=900)  # 15 min timeout
         
         if ret != 0:
             logger.error(f"Failed to install packages: {err}")
             # Try to install packages one by one to identify failures
             failed = []
-            for package in packages:
-                ret, _, _ = run_command(["apt-get", "install", "-y", package], timeout=120)
+            for package in to_install:
+                if not self.wait_for_dpkg_lock(60):
+                    failed.append(package)
+                    continue
+                    
+                ret, _, err = run_command(
+                    ["apt-get", "install", "-y", "--no-install-recommends", package], 
+                    timeout=300
+                )
                 if ret != 0:
+                    # Check if package exists
+                    ret2, _, _ = run_command(["apt-cache", "show", package], timeout=10)
+                    if ret2 != 0:
+                        logger.warning(f"Package '{package}' not found in repositories")
+                    else:
+                        logger.error(f"Failed to install '{package}': {err}")
                     failed.append(package)
             
             if failed:
                 logger.error(f"Failed to install: {', '.join(failed)}")
             
-            return len(failed) == 0
+            return len(failed) < len(to_install) / 2  # Success if >50% installed
         
         return True
     
@@ -167,9 +215,9 @@ class PackageManager:
         if not self.update_package_list():
             return False
         
-        # Install by category
+        # Install by category (skip optional packages that may not be available)
         categories = ["build", "python", "libraries", "media", 
-                     "kodi_build", "system", "network", "console"]
+                     "kodi_build", "system", "network"]
         
         for category in categories:
             logger.info(f"Installing {category} packages...")
