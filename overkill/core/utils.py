@@ -13,7 +13,8 @@ def run_command(
     cmd: Union[str, List[str]], 
     shell: bool = False,
     capture: bool = True,
-    timeout: Optional[int] = 30
+    timeout: Optional[int] = 30,
+    cwd: Optional[Union[str, Path]] = None
 ) -> Tuple[int, str, str]:
     """
     Run a shell command and return result
@@ -23,6 +24,7 @@ def run_command(
         shell: Run through shell
         capture: Capture output
         timeout: Command timeout in seconds
+        cwd: Working directory for the command
     
     Returns:
         Tuple of (return_code, stdout, stderr)
@@ -31,6 +33,8 @@ def run_command(
         cmd = cmd.split()
     
     logger.debug(f"Running command: {cmd}")
+    if cwd:
+        logger.debug(f"Working directory: {cwd}")
     
     try:
         result = subprocess.run(
@@ -38,7 +42,8 @@ def run_command(
             shell=shell,
             capture_output=capture,
             text=True,
-            timeout=timeout
+            timeout=timeout,
+            cwd=cwd
         )
         
         return result.returncode, result.stdout, result.stderr

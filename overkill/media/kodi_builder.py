@@ -61,7 +61,7 @@ class KodiBuilder:
             "libgl1-mesa-dev", "libglu1-mesa-dev", "libgnutls28-dev",
             "libgpg-error-dev", "libgtest-dev", "libinput-dev", "libiso9660-dev",
             "libjpeg-dev", "liblcms2-dev", "liblirc-dev", "libltdl-dev",
-            "liblzo2-dev", "libmicrohttpd-dev", "libmysqlclient-dev",
+            "liblzo2-dev", "libmicrohttpd-dev", "libmariadb-dev",
             "libnfs-dev", "libogg-dev", "libomxil-bellagio-dev", "libpcre3-dev",
             "libplist-dev", "libpng-dev", "libpulse-dev", "libshairplay-dev",
             "libsmbclient-dev", "libspdlog-dev", "libsqlite3-dev", "libssl-dev",
