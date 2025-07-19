@@ -5,11 +5,8 @@ import os
 import sys
 import time
 import getpass
-import termios
-import tty
 from pathlib import Path
 from typing import Optional, List, Tuple
-import click
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -342,14 +339,26 @@ To cancel the installation, press CTRL+C at any time.
         console.print("\n[cyan]⏱️  Estimated build time: 45-80 minutes on Pi 5[/cyan]")
         console.print("[cyan]💾 Required disk space: ~10GB[/cyan]")
         
-        response = click.prompt(
-            "\n[KODI INSTALLATION]\n"
-            "1) Build from source (recommended for best performance)\n"
-            "2) Skip for now (can install later)\n"
-            "\nChoice", 
-            type=click.Choice(['1', '2']), 
-            default='2'
-        )
+        # Use TTY-safe input instead of click.prompt
+        console.print("\n[KODI INSTALLATION]")
+        console.print("1) Build from source (recommended for best performance)")
+        console.print("2) Skip for now (can install later)")
+        console.print("\nChoice (1, 2) [2]: ", end="")
+        
+        try:
+            with open('/dev/tty', 'r') as tty:
+                response = tty.readline().strip()
+        except:
+            response = console.input().strip()
+        
+        # Default to '2' if empty
+        if not response:
+            response = '2'
+        
+        # Validate input
+        if response not in ['1', '2']:
+            console.print(f"[yellow]Invalid choice '{response}'. Defaulting to skip (2).[/yellow]")
+            response = '2'
         
         if response == '1':
             builder = KodiBuilder()
@@ -423,7 +432,16 @@ To cancel the installation, press CTRL+C at any time.
         console.print("\n[cyan]Run 'sudo overkill' to access the configuration interface[/cyan]")
         
         console.print("\n[white]Ready to experience UNLIMITED POWER?[/white]")
-        if click.confirm("Reboot now to apply all changes?"):
+        console.print("Reboot now to apply all changes? [Y/n]: ", end="")
+        
+        try:
+            with open('/dev/tty', 'r') as tty:
+                response = tty.readline().strip().lower()
+        except:
+            response = console.input().strip().lower()
+        
+        # Default to yes if empty
+        if not response or response in ['y', 'yes']:
             console.print("[red]ACTIVATING OVERKILL MODE...[/red]")
             time.sleep(3)
             run_command(["reboot"])
