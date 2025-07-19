@@ -53,14 +53,20 @@ Documentation = "https://github.com/flashingcursor/overkill-pi/wiki"
 Repository = "https://github.com/flashingcursor/overkill-pi"
 Issues = "https://github.com/flashingcursor/overkill-pi/issues"
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["overkill*"]
+exclude = ["tests*"]
+
 [tool.setuptools]
-packages = ["overkill"]
 include-package-data = true
 
 [tool.setuptools.package-data]
 overkill = [
     "data/*.yaml",
     "templates/*.conf",
+    "run_installer.py",
+    "run_configurator.py",
 ]
 
 [tool.black]

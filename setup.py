@@ -50,7 +50,7 @@ setup(
         ],
     },
     package_data={
-        "overkill": ["data/*.yaml", "templates/*.conf"],
+        "overkill": ["data/*.yaml", "templates/*.conf", "run_installer.py", "run_configurator.py"],
     },
     include_package_data=True,
 )

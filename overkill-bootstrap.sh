@@ -132,7 +132,7 @@ install_overkill() {
     # For development, install from current directory
     if [[ -f "./setup.py" ]] && [[ -d "./overkill" ]]; then
         log "Installing from local directory..."
-        pip install --use-pep517 -e .
+        pip install --use-pep517 --force-reinstall -e .
     else
         # For production, clone from repository
         log "Cloning from repository..."
@@ -141,7 +141,7 @@ install_overkill() {
         cd "$temp_dir"
         
         # Install the package using PEP 517
-        pip install --use-pep517 .
+        pip install --use-pep517 --force-reinstall .
         
         # Copy any additional files needed
         if [[ -d "kodi-addon" ]]; then
@@ -173,13 +173,21 @@ if [ -t 0 ] && [[ $(tty) =~ ^/dev/tty[0-9]+$ ]]; then
     setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null
 fi
 
+# Find the overkill package location
+OVERKILL_PKG=$(python -c "import overkill; import os; print(os.path.dirname(overkill.__file__))" 2>/dev/null)
+
+if [ -z "$OVERKILL_PKG" ]; then
+    echo "Error: OVERKILL package not found in virtual environment"
+    exit 1
+fi
+
 # Check if first run (no config exists)
 if [ ! -f "/etc/overkill/config.json" ]; then
-    # First run - launch installer directly
-    exec python -c "from overkill.installer import main; main()" "$@"
+    # First run - run installer
+    exec python "$OVERKILL_PKG/run_installer.py" "$@"
 else
-    # Config exists - launch configurator directly
-    exec python -c "from overkill.configurator import main; main()" "$@"
+    # Config exists - run configurator
+    exec python "$OVERKILL_PKG/run_configurator.py" "$@"
 fi
 EOF
     

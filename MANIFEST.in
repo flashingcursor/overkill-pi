@@ -12,6 +12,8 @@ include pyproject.toml
 # Include package data
 recursive-include overkill/data *.yaml *.yml
 recursive-include overkill/templates *.conf *.txt
+include overkill/run_installer.py
+include overkill/run_configurator.py
 
 # Include Kodi addon
 recursive-include kodi-addon *
