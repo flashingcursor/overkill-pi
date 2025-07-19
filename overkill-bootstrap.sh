@@ -61,7 +61,7 @@ check_system() {
     log "Checking system compatibility..."
     
     # Check for Pi 5
-    local model=$(cat /proc/device-tree/model 2>/dev/null || echo "Unknown")
+    local model=$(tr -d '\0' < /proc/device-tree/model 2>/dev/null || echo "Unknown")
     if [[ ! "$model" =~ "Raspberry Pi 5" ]]; then
         warn "This is optimized for Raspberry Pi 5"
         warn "Detected: $model"
