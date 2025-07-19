@@ -50,7 +50,7 @@ class KodiBuilder:
         # Build dependencies
         self.build_deps = [
             "autoconf", "automake", "autopoint", "gettext", "autotools-dev",
-            "cmake", "curl", "default-jre", "gawk", "gcc", "g++", "cpp",
+            "cmake", "curl", "default-jre", "gawk", "gcc", "g++", "cpp", "pkg-config",
             "flatbuffers-compiler", "gdc", "gperf", "libasound2-dev",
             "libass-dev", "libavahi-client-dev", "libavahi-common-dev",
             "libbluetooth-dev", "libbluray-dev", "libbz2-dev", "libcdio-dev", "libcdio++-dev",
@@ -71,7 +71,8 @@ class KodiBuilder:
             "libxmu-dev", "libxrandr-dev", "libxslt1-dev", "libxt-dev",
             "lsb-release", "meson", "nasm", "ninja-build", "python3-dev",
             "python3-pil", "python3-pip", "rapidjson-dev", "swig", "unzip",
-            "uuid-dev", "vainfo", "wayland-protocols", "waylandpp-dev", "zip", "zlib1g-dev"
+            "uuid-dev", "vainfo", "wayland-protocols", "waylandpp-dev", "zip", "zlib1g-dev",
+            "libdisplay-info-dev"
         ]
     
     def prepare_build_environment(self) -> bool:
@@ -187,10 +188,33 @@ class KodiBuilder:
         
         return True
     
+    def check_libdisplay_info(self) -> bool:
+        """Check if libdisplay-info is available"""
+        # First check if the package exists
+        ret, _, _ = run_command(["apt-cache", "show", "libdisplay-info-dev"], timeout=10)
+        if ret == 0:
+            # Try to install it
+            ret, _, _ = run_command(["apt-get", "install", "-y", "libdisplay-info-dev"], timeout=120)
+            if ret == 0:
+                logger.info("libdisplay-info-dev installed successfully")
+                return True
+        
+        # Check if library is already installed
+        ret, _, _ = run_command(["pkg-config", "--exists", "libdisplay-info"], timeout=5)
+        if ret == 0:
+            return True
+            
+        logger.warning("libdisplay-info not available, will build without it")
+        return False
+    
     def configure_build(self) -> bool:
         """Configure Kodi build with CMake"""
         build_path = self.source_dir / "build"
         ensure_directory(build_path)
+        
+        # Check for optional dependencies
+        if not self.check_libdisplay_info():
+            self.cmake_flags["ENABLE_LIBDISPLAYINFO"] = "OFF"
         
         # Prepare CMake arguments
         cmake_args = ["cmake"]
