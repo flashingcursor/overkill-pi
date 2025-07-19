@@ -5,6 +5,8 @@ import os
 import sys
 import time
 import getpass
+import termios
+import tty
 from pathlib import Path
 from typing import Optional, List, Tuple
 import click
@@ -96,15 +98,47 @@ To cancel the installation, press CTRL+C at any time.
         
         console.print(disclaimer)
         
-        while True:
-            agreement = console.input("\n> ")
-            if agreement == "I AGREE":
-                return True
-            elif agreement.upper() == "I AGREE":
-                console.print("[yellow]Please type exactly 'I AGREE' (case sensitive)[/yellow]")
-            else:
-                console.print("[red]Agreement not provided. Installation cancelled.[/red]")
-                return False
+        # Use /dev/tty for input to work with piped scripts
+        try:
+            with open('/dev/tty', 'r') as tty:
+                while True:
+                    console.print("\n> ", end="", style="white")
+                    console.file.flush()  # Ensure prompt is displayed
+                    agreement = tty.readline().strip()
+                    
+                    # Debug output
+                    logger.debug(f"Received input: '{agreement}'")
+                    
+                    if agreement == "I AGREE":
+                        return True
+                    elif agreement.upper() == "I AGREE":
+                        console.print("[yellow]Please type exactly 'I AGREE' (case sensitive)[/yellow]")
+                    elif not agreement:
+                        # Empty input, prompt again
+                        console.print("[yellow]Please type 'I AGREE' to continue or press Ctrl+C to cancel[/yellow]")
+                    else:
+                        console.print(f"[red]Invalid response: '{agreement}'. Installation cancelled.[/red]")
+                        return False
+        except FileNotFoundError:
+            logger.debug("No /dev/tty available, falling back to standard input")
+        except IOError as e:
+            logger.debug(f"Failed to use /dev/tty: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error with /dev/tty: {e}")
+            import traceback
+            traceback.print_exc()
+            while True:
+                agreement = console.input("\n> ")
+                if agreement == "I AGREE":
+                    return True
+                elif agreement.upper() == "I AGREE":
+                    console.print("[yellow]Please type exactly 'I AGREE' (case sensitive)[/yellow]")
+                elif not agreement:
+                    # Empty input, prompt again
+                    console.print("[yellow]Please type 'I AGREE' to continue or press Ctrl+C to cancel[/yellow]")
+                else:
+                    console.print("[red]Agreement not provided. Installation cancelled.[/red]")
+                    return False
     
     def check_system(self) -> bool:
         """Validate system with EXTREME PREJUDICE"""
@@ -117,7 +151,15 @@ To cancel the installation, press CTRL+C at any time.
             console.print(f"[yellow]Detected Model: {self.system.model}[/yellow]")
             console.print("[yellow]Proceeding may cause instability or failure. You proceed at your own risk.[/yellow]")
             
-            if not click.confirm("Are you sure you want to continue?"):
+            # Use TTY-safe confirmation
+            console.print("Are you sure you want to continue? [y/N]: ", end="")
+            try:
+                with open('/dev/tty', 'r') as tty:
+                    response = tty.readline().strip().lower()
+            except:
+                response = console.input().strip().lower()
+            
+            if response not in ['y', 'yes']:
                 console.print("[red]Installation aborted by user.[/red]")
                 return False
         else:
@@ -167,6 +209,7 @@ To cancel the installation, press CTRL+C at any time.
             
             # Get password
             while True:
+                # getpass automatically uses /dev/tty when available
                 password = getpass.getpass("Enter a strong password for the 'overkill' user: ")
                 confirm = getpass.getpass("Confirm the password: ")
                 
