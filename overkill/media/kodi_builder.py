@@ -36,6 +36,7 @@ class KodiBuilder:
             "ENABLE_VDPAU": "OFF",  # Not available on Pi
             "CORE_PLATFORM_NAME": "gbm",
             "GBM_RENDER_SYSTEM": "gles",
+            "APP_RENDER_SYSTEM": "gles",
             "ENABLE_PULSEAUDIO": "ON",
             "ENABLE_ALSA": "ON",
             "ENABLE_CEC": "ON",
@@ -52,7 +53,7 @@ class KodiBuilder:
             "cmake", "curl", "default-jre", "gawk", "gcc", "g++", "cpp",
             "flatbuffers-compiler", "gdc", "gperf", "libasound2-dev",
             "libass-dev", "libavahi-client-dev", "libavahi-common-dev",
-            "libbluetooth-dev", "libbluray-dev", "libbz2-dev", "libcdio-dev",
+            "libbluetooth-dev", "libbluray-dev", "libbz2-dev", "libcdio-dev", "libcdio++-dev",
             "libcec-dev", "libp8-platform-dev", "libcrossguid-dev",
             "libcurl4-openssl-dev", "libcwiid-dev", "libdbus-1-dev",
             "libegl1-mesa-dev", "libenca-dev", "libflac-dev", "libfontconfig-dev",
@@ -65,7 +66,7 @@ class KodiBuilder:
             "libnfs-dev", "libogg-dev", "libomxil-bellagio-dev", "libpcre3-dev",
             "libplist-dev", "libpng-dev", "libpulse-dev", "libshairplay-dev",
             "libsmbclient-dev", "libspdlog-dev", "libsqlite3-dev", "libssl-dev",
-            "libtag1-dev", "libtiff5-dev", "libtinyxml-dev", "libudev-dev",
+            "libtag1-dev", "libtiff5-dev", "libtinyxml-dev", "libtinyxml2-dev", "libudev-dev",
             "libunistring-dev", "libva-dev", "libvorbis-dev", "libxkbcommon-dev",
             "libxmu-dev", "libxrandr-dev", "libxslt1-dev", "libxt-dev",
             "lsb-release", "meson", "nasm", "ninja-build", "python3-dev",
@@ -85,18 +86,29 @@ class KodiBuilder:
         
         # Install dependencies in chunks to avoid command line length issues
         chunk_size = 20
+        failed_packages = []
+        
         for i in range(0, len(self.build_deps), chunk_size):
             chunk = self.build_deps[i:i + chunk_size]
             logger.info(f"Installing dependencies chunk {i//chunk_size + 1}...")
             
             ret, _, err = run_command(["apt-get", "install", "-y"] + chunk, timeout=600)
             if ret != 0:
-                logger.error(f"Failed to install dependencies: {err}")
-                # Continue anyway, some might be optional
+                logger.warning(f"Some packages failed to install: {err}")
+                # Try to install packages one by one to identify failures
+                for package in chunk:
+                    ret, _, _ = run_command(["apt-get", "install", "-y", package], timeout=120)
+                    if ret != 0:
+                        failed_packages.append(package)
+                        logger.warning(f"Failed to install: {package}")
         
         # Install Python dependencies
         python_deps = ["mako", "requests", "setuptools"]
         ret, _, _ = run_command(["pip3", "install"] + python_deps)
+        
+        if failed_packages:
+            logger.warning(f"The following packages failed to install: {', '.join(failed_packages)}")
+            logger.warning("Build may still succeed if these were optional dependencies")
         
         return True
     
