@@ -3,24 +3,6 @@
 
 import os
 import sys
-
-# Set TTY font immediately before any output
-def _set_tty_font_early():
-    """Set TTY font before any imports that might produce output"""
-    try:
-        # Check if on physical console
-        tty = os.ttyname(0)
-        if tty.startswith("/dev/tty") and not tty.startswith("/dev/pts"):
-            # Apply large font for TV viewing
-            os.system("setfont /usr/share/consolefonts/Lat15-TerminusBold28x14.psf.gz 2>/dev/null || " +
-                     "setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || " +
-                     "setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null")
-    except:
-        pass
-
-# Apply font immediately
-_set_tty_font_early()
-
 import time
 import getpass
 from pathlib import Path
@@ -407,7 +389,6 @@ To cancel the installation, press CTRL+C at any time.
     
     def run(self):
         """Main installation flow"""
-        self.set_tty_font()
         if not is_root():
             console.print("[red]OVERKILL requires root for UNLIMITED POWER[/red]")
             sys.exit(1)
@@ -418,9 +399,7 @@ To cancel the installation, press CTRL+C at any time.
         
         console.clear()
         self.show_banner()
-        
-        # Complete TTY configuration (font already set at script start)
-
+        self.set_tty_font()
         
         console.print("\n[yellow]User agreement accepted. Preparing for ABSOLUTE DOMINATION...[/yellow]\n")
         time.sleep(2)

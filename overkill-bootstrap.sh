@@ -166,13 +166,20 @@ OVERKILL_HOME="/opt/overkill"
 # Activate virtual environment
 source "$OVERKILL_HOME/venv/bin/activate"
 
+# Set TTY font early for TV viewing
+if [ -t 0 ] && [[ $(tty) =~ ^/dev/tty[0-9]+$ ]]; then
+    setfont /usr/share/consolefonts/Lat15-TerminusBold28x14.psf.gz 2>/dev/null || \
+    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || \
+    setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null
+fi
+
 # Check if first run (no config exists)
 if [ ! -f "/etc/overkill/config.json" ]; then
-    # First run - launch installer
-    exec python -m overkill.installer "$@"
+    # First run - launch installer directly
+    exec python -c "from overkill.installer import main; main()" "$@"
 else
-    # Config exists - launch configurator
-    exec python -m overkill.configurator "$@"
+    # Config exists - launch configurator directly
+    exec python -c "from overkill.configurator import main; main()" "$@"
 fi
 EOF
     
