@@ -132,7 +132,7 @@ install_overkill() {
     # For development, install from current directory
     if [[ -f "./setup.py" ]] && [[ -d "./overkill" ]]; then
         log "Installing from local directory..."
-        pip install -e .
+        pip install --use-pep517 -e .
     else
         # For production, clone from repository
         log "Cloning from repository..."
@@ -140,8 +140,8 @@ install_overkill() {
         git clone -b "$OVERKILL_BRANCH" "$OVERKILL_REPO" "$temp_dir"
         cd "$temp_dir"
         
-        # Install the package
-        pip install .
+        # Install the package using PEP 517
+        pip install --use-pep517 .
         
         # Copy any additional files needed
         if [[ -d "kodi-addon" ]]; then

@@ -1,0 +1,25 @@
+# Include documentation
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include INSTALL.md
+
+# Include configuration files
+include requirements.txt
+include pyproject.toml
+
+# Include package data
+recursive-include overkill/data *.yaml *.yml
+recursive-include overkill/templates *.conf *.txt
+
+# Include Kodi addon
+recursive-include kodi-addon *
+
+# Exclude development files
+exclude CLAUDE.md
+recursive-exclude todo *
+recursive-exclude tests *
+recursive-exclude docs *
+prune .git
+prune .github
