@@ -59,7 +59,7 @@ class KodiBuilder:
             "libegl1-mesa-dev", "libenca-dev", "libflac-dev", "libfontconfig-dev",
             "libfmt-dev", "libfreetype6-dev", "libfribidi-dev", "libfstrcmp-dev",
             "libgbm-dev", "libgcrypt20-dev", "libgif-dev", "libgles2-mesa-dev",
-            "libgl1-mesa-dev", "libglu1-mesa-dev", "libgnutls28-dev",
+            "libgl1-mesa-dev", "libglu1-mesa-dev", "libgnutls28-dev", "libdrm-dev",
             "libgpg-error-dev", "libgtest-dev", "libinput-dev", "libiso9660-dev",
             "libjpeg-dev", "liblcms2-dev", "liblirc-dev", "libltdl-dev",
             "liblzo2-dev", "libmicrohttpd-dev", "libmariadb-dev",

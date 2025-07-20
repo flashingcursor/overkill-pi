@@ -247,7 +247,12 @@ To cancel the installation, press CTRL+C at any time.
         console.print("  • Network utilities")
         console.print("\n[cyan]This may take 10-15 minutes depending on your internet speed[/cyan]")
         
-        # Update package list first
+        # Add Raspberry Pi unstable repository first
+        console.print("\n[green]Adding Raspberry Pi unstable repository...[/green]")
+        if not self.package_manager.add_rpi_unstable_repo():
+            console.print("[yellow]Warning: Failed to add RPi repo, continuing with standard packages[/yellow]")
+        
+        # Update package list
         console.print("\n[green]Updating package database...[/green]")
         if not self.package_manager.update_package_list():
             console.print("[yellow]Warning: Package update failed, continuing anyway[/yellow]")
@@ -258,8 +263,10 @@ To cancel the installation, press CTRL+C at any time.
             ("python", "Python packages"),
             ("libraries", "system libraries"),
             ("media", "media codecs"),
+            ("mesa", "Mesa V3D drivers"),
             ("system", "monitoring tools"),
-            ("network", "network utilities")
+            ("network", "network utilities"),
+            ("network_extra", "optional network tools")
         ]
         
         failed_categories = []
@@ -274,8 +281,12 @@ To cancel the installation, press CTRL+C at any time.
                 task = progress.add_task(f"Installing {description}...", total=None)
                 
                 if not self.package_manager.install_category(category):
-                    failed_categories.append(category)
-                    console.print(f"[yellow]⚠️  Some {description} packages failed to install[/yellow]")
+                    # Don't fail on optional network tools
+                    if category == "network_extra":
+                        console.print(f"[yellow]⚠️  Optional {description} skipped (not critical)[/yellow]")
+                    else:
+                        failed_categories.append(category)
+                        console.print(f"[yellow]⚠️  Some {description} packages failed to install[/yellow]")
                 else:
                     console.print(f"[green]✓ {description.capitalize()} installed successfully[/green]")
         
@@ -467,86 +478,6 @@ To cancel the installation, press CTRL+C at any time.
         if install_umbrella or install_cumination:
             self.install_selected_addons(install_umbrella, install_cumination)
     
-    def install_rpi_mesa(self) -> bool:
-        """Install newest Mesa from Raspberry Pi unstable repo"""
-        try:
-            # Add RPi Foundation's official unstable repo
-            console.print("[cyan]Adding Raspberry Pi unstable repository...[/cyan]")
-            repo_content = "deb http://archive.raspberrypi.org/debian/ bookworm main\n"
-            with open("/etc/apt/sources.list.d/raspi.list", "w") as f:
-                f.write(repo_content)
-            
-            # Add the Raspberry Pi GPG key
-            console.print("[cyan]Adding Raspberry Pi GPG key...[/cyan]")
-            ret, _, err = run_command([
-                "bash", "-c",
-                "curl -fsSL https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/raspi.gpg"
-            ], timeout=30)
-            
-            if ret != 0:
-                logger.error(f"Failed to add GPG key: {err}")
-                return False
-            
-            # Pin Mesa packages to RPi repo
-            console.print("[cyan]Configuring package priorities...[/cyan]")
-            pin_content = """Package: libgl1-mesa-dri libglapi-mesa libgbm1 libegl1-mesa mesa-vulkan-drivers
-Pin: origin "archive.raspberrypi.org"
-Pin-Priority: 1001
-"""
-            with open("/etc/apt/preferences.d/99-raspi-mesa.pref", "w") as f:
-                f.write(pin_content)
-            
-            # Update package cache
-            console.print("[cyan]Updating package cache...[/cyan]")
-            ret, _, err = run_command(["apt-get", "update"], timeout=300)
-            if ret != 0:
-                logger.warning(f"Package update had issues: {err}")
-            
-            # Upgrade all packages to get latest from RPi repo
-            console.print("[cyan]Upgrading system packages...[/cyan]")
-            ret, _, err = run_command(["apt-get", "upgrade", "-y"], timeout=900)
-            if ret != 0:
-                logger.warning(f"Package upgrade had issues: {err}")
-            
-            # Install rpi-update tool
-            console.print("[cyan]Installing rpi-update tool...[/cyan]")
-            ret, _, err = run_command(["apt-get", "install", "-y", "rpi-update"], timeout=300)
-            if ret != 0:
-                logger.error(f"Failed to install rpi-update: {err}")
-                return False
-            
-            # Run rpi-update to get latest firmware
-            console.print("[cyan]Updating Raspberry Pi firmware...[/cyan]")
-            ret, _, err = run_command(["rpi-update"], timeout=600)
-            if ret != 0:
-                logger.warning(f"Firmware update had issues: {err}")
-            
-            # Install RPi-optimized Mesa stack
-            console.print("[cyan]Installing RPi-optimized Mesa drivers...[/cyan]")
-            mesa_packages = [
-                "libgl1-mesa-dri",
-                "libglapi-mesa",
-                "libgbm1",
-                "libegl1-mesa",
-                "mesa-vulkan-drivers"
-            ]
-            
-            ret, _, err = run_command(
-                ["apt-get", "install", "-y"] + mesa_packages,
-                timeout=600
-            )
-            
-            if ret != 0:
-                logger.error(f"Failed to install Mesa packages: {err}")
-                return False
-            
-            console.print("[green]RPi Mesa drivers and firmware updated successfully[/green]")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Failed to install RPi Mesa: {e}")
-            return False
-    
     def disable_systemd_networkd(self) -> bool:
         """Disable systemd-networkd to prevent boot delays"""
         try:
@@ -608,12 +539,13 @@ Pin-Priority: 1001
         console.print("[green]Setting final permissions...[/green]")
         run_command(["chown", "-R", "overkill:overkill", "/home/overkill"])
         
-        # Install newest Mesa from Raspberry Pi unstable repo
-        console.print("[green]Installing latest Mesa drivers from Raspberry Pi repo...[/green]")
-        if self.install_rpi_mesa():
-            console.print("[green]Latest Mesa drivers installed[/green]")
+        # Update Raspberry Pi firmware
+        console.print("[green]Updating Raspberry Pi firmware...[/green]")
+        ret, _, err = run_command(["rpi-update"], timeout=600)
+        if ret != 0:
+            console.print("[yellow]Firmware update failed - you can run 'rpi-update' manually later[/yellow]")
         else:
-            console.print("[yellow]Mesa installation failed - manual configuration may be needed[/yellow]")
+            console.print("[green]Firmware updated successfully[/green]")
         
         # Apply GPU configuration for V3D support
         console.print("[green]Configuring GPU for V3D support...[/green]")

@@ -1,6 +1,7 @@
 """Package management for OVERKILL system setup"""
 
 import subprocess
+from pathlib import Path
 from typing import List, Dict, Optional
 from ..core.logger import logger
 from ..core.utils import run_command
@@ -60,11 +61,23 @@ class PackageManager:
                 "lirc",
                 "ir-keytable"
             ],
+            "mesa": [
+                # Mesa drivers from RPi unstable repo
+                "libgl1-mesa-dri",
+                "libglapi-mesa",
+                "libgbm1",
+                "libegl1-mesa",
+                "mesa-vulkan-drivers",
+                # RPi firmware updater
+                "rpi-update"
+            ],
             "kodi_build": [
                 "libgl1-mesa-dev",
                 "libgles2-mesa-dev",
                 "libgbm-dev",
                 "libdrm-dev",
+                "libdrm2",
+                "libdrm-common",
                 "libegl1-mesa-dev",
                 "libwayland-dev",
                 "libxkbcommon-dev",
@@ -104,7 +117,9 @@ class PackageManager:
             ],
             "network": [
                 "curl",
-                "wget",
+                "wget"
+            ],
+            "network_extra": [
                 "net-tools",
                 "iperf3"
             ],
@@ -129,6 +144,84 @@ class PackageManager:
             return False
         
         return True
+    
+    def add_rpi_unstable_repo(self) -> bool:
+        """Add Raspberry Pi unstable repository for latest Mesa drivers"""
+        logger.info("Adding Raspberry Pi unstable repository...")
+        
+        try:
+            # Ensure keyrings directory exists first
+            keyring_dir = Path("/etc/apt/keyrings")
+            keyring_dir.mkdir(parents=True, exist_ok=True)
+            
+            keyring_path = "/etc/apt/keyrings/raspi.gpg"
+            
+            # Add the Raspberry Pi GPG key
+            logger.info("Adding Raspberry Pi GPG key...")
+            
+            # Download and install GPG key using non-interactive method
+            gpg_key_url = "https://archive.raspberrypi.org/debian/raspberrypi.gpg.key"
+            
+            # Download the key
+            ret, key_data, err = run_command(["curl", "-fsSL", gpg_key_url], timeout=30)
+            if ret != 0:
+                logger.error(f"Failed to download GPG key: {err}")
+                return False
+            
+            # Convert to binary format and save
+            try:
+                import subprocess
+                proc = subprocess.Popen(
+                    ["gpg", "--dearmor", "-o", keyring_path],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                _, stderr = proc.communicate(input=key_data.encode())
+                
+                if proc.returncode != 0:
+                    logger.error(f"Failed to dearmor GPG key: {stderr.decode()}")
+                    return False
+                
+                # Ensure proper permissions
+                Path(keyring_path).chmod(0o644)
+                
+            except Exception as e:
+                logger.error(f"Failed to process GPG key: {e}")
+                return False
+            
+            # Add RPi Foundation's official unstable repo with signed-by option
+            repo_content = f"deb [signed-by={keyring_path}] http://archive.raspberrypi.org/debian/ bookworm main\n"
+            with open("/etc/apt/sources.list.d/raspi.list", "w") as f:
+                f.write(repo_content)
+            
+            # Pin Mesa packages to RPi repo
+            logger.info("Configuring package priorities...")
+            pin_content = """Package: libgl1-mesa-dri libglapi-mesa libgbm1 libegl1-mesa mesa-vulkan-drivers
+Pin: origin "archive.raspberrypi.org"
+Pin-Priority: 1001
+"""
+            with open("/etc/apt/preferences.d/99-raspi-mesa.pref", "w") as f:
+                f.write(pin_content)
+            
+            # Update package cache
+            logger.info("Updating package cache with new repository...")
+            ret, _, err = run_command(["apt-get", "update"], timeout=300)
+            if ret != 0:
+                logger.warning(f"Package update had issues: {err}")
+            
+            # Upgrade existing packages to get latest versions from RPi repo
+            logger.info("Upgrading system packages...")
+            ret, _, err = run_command(["apt-get", "upgrade", "-y"], timeout=900)
+            if ret != 0:
+                logger.warning(f"Package upgrade had issues: {err}")
+            
+            logger.info("Raspberry Pi unstable repository added successfully")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to add RPi repository: {e}")
+            return False
     
     def wait_for_dpkg_lock(self, max_wait: int = 300) -> bool:
         """Wait for dpkg lock to be released"""
@@ -186,7 +279,7 @@ class PackageManager:
                     
                 ret, _, err = run_command(
                     ["apt-get", "install", "-y", "--no-install-recommends", package], 
-                    timeout=300
+                    timeout=600  # 10 minutes for individual packages
                 )
                 if ret != 0:
                     # Check if package exists

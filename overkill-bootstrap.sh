@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # OVERKILL Bootstrap Script - Minimal installer for Python-based configurator
 # Version: 3.0.0-PYTHON
 # This script sets up the Python environment and launches the main configurator
 
-set -e
+set -o errexit -o nounset -o pipefail
 
 # Colors
 RED='\033[0;31m'
@@ -17,6 +17,22 @@ OVERKILL_HOME="/opt/overkill"
 OVERKILL_REPO="https://github.com/flashingcursor/overkill-pi"
 OVERKILL_BRANCH="master"
 
+# Temp directory (will be set in main)
+TEMP_DIR=""
+
+# Cleanup function
+cleanup() {
+    local exit_code=$?
+    if [[ -n "${TEMP_DIR:-}" ]] && [[ -d "${TEMP_DIR}" ]]; then
+        log "Cleaning up temporary files..."
+        rm -rf "${TEMP_DIR}"
+    fi
+    exit ${exit_code}
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT INT TERM
+
 log() {
     echo -e "${GREEN}[OVERKILL]${NC} $1"
 }
@@ -28,6 +44,60 @@ error() {
 
 warn() {
     echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+# --- Professional Task Runner ---
+LOG_DIR="/var/log/overkill"
+LOG_FILE="${LOG_DIR}/bootstrap_$(date +%Y%m%d_%H%M%S).log"
+SPINNER_PID=0
+
+# Ensure log directory exists
+mkdir -p "${LOG_DIR}"
+
+# Starts a spinner animation for a background process
+start_spinner() {
+    (
+        tput civis # Hide cursor
+        while :; do
+            for s in / - \\ \|; do
+                printf "\r${CYAN}  [%s]${NC} $1..." "$s"
+                sleep 0.1
+            done
+        done
+    ) &
+    SPINNER_PID=$!
+}
+
+# Stops the spinner and displays the final result
+stop_spinner() {
+    kill $SPINNER_PID &>/dev/null
+    wait $SPINNER_PID &>/dev/null
+    tput cnorm # Show cursor
+    printf "\r\033[K" # Clear the line
+
+    if [[ $1 -eq 0 ]]; then
+        printf "${GREEN}  [✓]${NC} $2... Done\n"
+    else
+        printf "${RED}  [✗]${NC} $2... FAILED\n"
+        echo -e "${RED}    Error details are in the log file: $LOG_FILE${NC}"
+    fi
+}
+
+# The main function to run a command with professional output
+run_task() {
+    local desc="$1"
+    local cmd="$2"
+    
+    start_spinner "$desc"
+    
+    eval "$cmd" >> "$LOG_FILE" 2>&1
+    local exit_code=$?
+    
+    stop_spinner $exit_code "$desc"
+
+    if [[ $exit_code -ne 0 ]]; then
+        exit 1
+    fi
 }
 
 show_banner() {
@@ -66,16 +136,17 @@ check_system() {
         is_pi5=true
     fi
     
-    if [[ "$is_pi5" != "true" ]]; then
+    if [[ "${is_pi5}" != "true" ]]; then
         warn "This is optimized for Raspberry Pi 5"
-        local model=$(grep "Model" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs)
-        if [[ -z "$model" ]]; then
+        local model=$(grep "Model" /proc/cpuinfo 2>/dev/null | cut -d: -f2 | xargs || echo "Unknown device")
+        if [[ -z "${model}" ]]; then
             model="Unknown device"
         fi
-        warn "Detected: $model"
-        read -p "Continue anyway? (y/N): " -n 1 -r </dev/tty
+        warn "Detected: ${model}"
+        local REPLY
+        read -p "Continue anyway? (y/N): " -n 1 -r REPLY </dev/tty
         echo
-        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        if [[ ! ${REPLY} =~ ^[Yy]$ ]]; then
             error "Installation cancelled"
         fi
     fi
@@ -88,113 +159,106 @@ check_system() {
 
 install_dependencies() {
     log "Installing Python and system dependencies..."
+    echo -e "  (Full details will be logged to ${YELLOW}$LOG_FILE${NC})"
+    export DEBIAN_FRONTEND=noninteractive
     
-    apt-get update
-    apt-get install -y \
-        python3 \
-        python3-pip \
-        python3-venv \
-        python3-dev \
-        git \
-        dialog \
-        build-essential \
-        libffi-dev \
-        libssl-dev \
-        stress-ng \
-        lm-sensors \
-        nvme-cli \
-        curl \
-        wget
+    run_task "Updating package lists" "apt-get update"
+    run_task "Installing required packages" "apt-get install -y python3 python3-pip python3-venv python3-dev git dialog build-essential libffi-dev libssl-dev stress-ng lm-sensors nvme-cli curl wget"
 }
 
 setup_python_environment() {
     log "Setting up Python virtual environment..."
     
     # Create overkill directory
-    mkdir -p "$OVERKILL_HOME"
+    run_task "Creating overkill directory" "mkdir -p '$OVERKILL_HOME'"
     
     # Create virtual environment
-    python3 -m venv "$OVERKILL_HOME/venv"
+    run_task "Creating Python virtual environment" "python3 -m venv '$OVERKILL_HOME/venv'"
     
     # Activate virtual environment
     source "$OVERKILL_HOME/venv/bin/activate"
     
     # Upgrade pip
-    pip install --upgrade pip wheel setuptools
+    run_task "Upgrading pip and setuptools" "source '$OVERKILL_HOME/venv/bin/activate' && pip install --upgrade pip wheel setuptools"
 }
 
 install_overkill() {
     log "Installing OVERKILL Python application..."
     
     # Activate virtual environment for installation
-    source "$OVERKILL_HOME/venv/bin/activate"
+    source "${OVERKILL_HOME}/venv/bin/activate"
     
     # For development, install from current directory
     if [[ -f "./setup.py" ]] && [[ -d "./overkill" ]]; then
         log "Installing from local directory..."
-        pip install --use-pep517 --force-reinstall -e .
+        run_task "Installing OVERKILL package" "source '${OVERKILL_HOME}/venv/bin/activate' && pip install --use-pep517 --force-reinstall -e ."
     else
         # For production, clone from repository
         log "Cloning from repository..."
-        local temp_dir="/tmp/overkill-install-$$"
-        git clone -b "$OVERKILL_BRANCH" "$OVERKILL_REPO" "$temp_dir"
-        cd "$temp_dir"
+        run_task "Cloning OVERKILL repository" "git clone -b '${OVERKILL_BRANCH}' '${OVERKILL_REPO}' '${TEMP_DIR}'"
+        cd "${TEMP_DIR}"
         
         # Install the package using PEP 517
-        pip install --use-pep517 --force-reinstall .
+        run_task "Installing OVERKILL package" "source '${OVERKILL_HOME}/venv/bin/activate' && pip install --use-pep517 --force-reinstall ."
         
         # Copy any additional files needed
         if [[ -d "kodi-addon" ]]; then
-            cp -r "kodi-addon" "$OVERKILL_HOME/"
+            run_task "Copying Kodi addon files" "cp -r 'kodi-addon' '${OVERKILL_HOME}/'"
         fi
         
-        # Cleanup
-        cd /
-        rm -rf "$temp_dir"
+        # Return to original directory
+        cd - >/dev/null
     fi
 }
 
 create_launcher() {
     log "Creating launcher script..."
     
-    cat > /usr/local/bin/overkill << 'EOF'
-#!/bin/bash
+    # Create the launcher script
+    run_task "Creating launcher script" "cat > /usr/local/bin/overkill << 'EOF'
+#!/usr/bin/env bash
 # OVERKILL Launcher
 
-OVERKILL_HOME="/opt/overkill"
+set -o errexit -o nounset -o pipefail
+
+OVERKILL_HOME=\"/opt/overkill\"
 
 # Activate virtual environment
-source "$OVERKILL_HOME/venv/bin/activate"
+source \"\${OVERKILL_HOME}/venv/bin/activate\"
 
 # Set TTY font early for TV viewing
-if [ -t 0 ] && [[ $(tty) =~ ^/dev/tty[0-9]+$ ]]; then
-    setfont /usr/share/consolefonts/Lat15-TerminusBold28x14.psf.gz 2>/dev/null || \
-    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || \
-    setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null
+if [ -t 0 ] && [[ \$(tty) =~ ^/dev/tty[0-9]+\$ ]]; then
+    setfont /usr/share/consolefonts/Lat15-TerminusBold28x14.psf.gz 2>/dev/null || \\
+    setfont /usr/share/consolefonts/Lat15-TerminusBold20x10.psf.gz 2>/dev/null || \\
+    setfont /usr/share/consolefonts/Lat15-Fixed16.psf.gz 2>/dev/null || true
 fi
 
 # Find the overkill package location
-OVERKILL_PKG=$(python -c "import overkill; import os; print(os.path.dirname(overkill.__file__))" 2>/dev/null)
+OVERKILL_PKG=\$(python -c \"import overkill; import os; print(os.path.dirname(overkill.__file__))\" 2>/dev/null)
 
-if [ -z "$OVERKILL_PKG" ]; then
-    echo "Error: OVERKILL package not found in virtual environment"
+if [ -z \"\${OVERKILL_PKG}\" ]; then
+    echo \"Error: OVERKILL package not found in virtual environment\"
     exit 1
 fi
 
 # Check if first run (no config exists)
-if [ ! -f "/etc/overkill/config.json" ]; then
+if [ ! -f \"/etc/overkill/config.json\" ]; then
     # First run - run installer
-    exec python "$OVERKILL_PKG/run_installer.py" "$@"
+    exec python \"\${OVERKILL_PKG}/run_installer.py\" \"\$@\"
 else
     # Config exists - run configurator
-    exec python "$OVERKILL_PKG/run_configurator.py" "$@"
+    exec python \"\${OVERKILL_PKG}/run_configurator.py\" \"\$@\"
 fi
-EOF
+EOF"
     
-    chmod +x /usr/local/bin/overkill
+    run_task "Setting launcher permissions" "chmod +x /usr/local/bin/overkill"
 }
 
 main() {
+    # Create temp directory
+    TEMP_DIR=$(mktemp -d /tmp/overkill-install.XXXXXX)
+    log "Created temporary directory: ${TEMP_DIR}"
+    
     clear
     show_banner
     
@@ -202,9 +266,10 @@ main() {
     check_system
     
     echo -e "${CYAN}Ready to install OVERKILL Python Configurator?${NC}"
-    read -p "Continue? (y/N): " -n 1 -r </dev/tty
+    local REPLY
+    read -p "Continue? (y/N): " -n 1 -r REPLY </dev/tty
     echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+    if [[ ! ${REPLY} =~ ^[Yy]$ ]]; then
         error "Installation cancelled"
     fi
     
