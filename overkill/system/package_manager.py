@@ -53,14 +53,6 @@ class PackageManager:
                 "libswscale-dev",
                 "libavfilter-dev",
                 "libavdevice-dev",
-                # Mesa runtime drivers for V3D
-                "mesa-va-drivers",
-                "mesa-vdpau-drivers",
-                "mesa-vulkan-drivers",
-                "libgl1-mesa-dri",
-                "libglx-mesa0",
-                "libgles2-mesa",
-                "libgbm1",
                 # CEC and remote control
                 "cec-utils",
                 "libcec6",
@@ -108,10 +100,7 @@ class PackageManager:
                 "htop",
                 "ncdu",
                 "tmux",
-                "screen",
-                # Pi firmware updates
-                "firmware-misc-nonfree",
-                "raspi-firmware"
+                "screen"
             ],
             "network": [
                 "curl",

@@ -100,6 +100,19 @@ class AddonManager:
                     "repository.risingtides",
                     "plugin.video.risingtides"
                 ]
+            ),
+            "cumination": AddonRepository(
+                name="Cumination Repository",
+                url="https://kinkin-dev.github.io/repository.kinkin/",
+                description="Adult content addon (18+ only)",
+                addons=[
+                    "repository.cumination",
+                    "plugin.video.cumination"
+                ],
+                dependencies=[
+                    "script.module.requests",
+                    "script.module.resolveurl"
+                ]
             )
         }
         

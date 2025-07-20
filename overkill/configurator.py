@@ -418,7 +418,7 @@ class OverkillConfigurator:
             menu_items.append("═══ OTHER REPOSITORIES ═══")
             
             # Other repos
-            for repo_name in ["crew", "numbers", "shadow", "rising_tides"]:
+            for repo_name in ["crew", "numbers", "shadow", "rising_tides", "cumination"]:
                 repo_info = self.addon_manager.get_repository_info(repo_name)
                 if repo_info:
                     status = " [INSTALLED]" if repo_info["installed"] else ""
@@ -448,11 +448,13 @@ class OverkillConfigurator:
                 self.install_repository("shadow")
             elif choice == 7:  # Rising Tides
                 self.install_repository("rising_tides")
-            elif choice == 9:  # Essential addons
+            elif choice == 8:  # Cumination
+                self.install_repository("cumination")
+            elif choice == 10:  # Essential addons
                 self.install_essential_addons()
-            elif choice == 10:  # Real-Debrid
+            elif choice == 11:  # Real-Debrid
                 self.configure_real_debrid()
-            elif choice == 11:  # Update all
+            elif choice == 12:  # Update all
                 self.update_all_repositories()
     
     def install_repository(self, repo_name: str):

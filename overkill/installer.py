@@ -293,6 +293,10 @@ To cancel the installation, press CTRL+C at any time.
         console.print("[green]Applying EXTREME kernel optimizations...[/green]")
         self.kernel_optimizer.apply_all_optimizations()
         console.print("[green]Kernel optimizations applied - MAXIMUM PERFORMANCE ACHIEVED[/green]")
+        
+        # Disable systemd-networkd to prevent boot delays
+        console.print("[green]Disabling unnecessary network services...[/green]")
+        self.disable_systemd_networkd()
     
     def configure_hardware(self):
         """PI 5 HARDWARE DOMINATION - NO RESTRICTIONS"""
@@ -418,8 +422,183 @@ To cancel the installation, press CTRL+C at any time.
         console.print("\n[cyan]Addon repositories can be installed from the configurator:[/cyan]")
         console.print("- Umbrella Repository (premium all-in-one addon)")
         console.print("- FEN/Seren Pack (popular streaming addons)")
+        console.print("- Cumination Repository (adult content, 18+ only)")
         console.print("- And many more!")
         console.print("\n[yellow]Access via: Media Services → Addon Repositories[/yellow]")
+        
+        # Check if Kodi is installed first
+        try:
+            from .media.addon_manager import AddonManager
+            addon_manager = AddonManager()
+            
+            if not addon_manager.check_kodi_installed():
+                console.print("\n[yellow]Kodi installation not detected - addons can be installed later[/yellow]")
+                return
+        except:
+            return
+        
+        # Ask about Umbrella
+        console.print("\n[yellow]Would you like to install the Umbrella addon?[/yellow]")
+        console.print("Umbrella is a premium all-in-one addon with Real-Debrid support.")
+        console.print("Install Umbrella? [y/N]: ", end="")
+        
+        try:
+            with open('/dev/tty', 'r') as tty:
+                response = tty.readline().strip().lower()
+        except:
+            response = console.input().strip().lower()
+        
+        install_umbrella = response in ['y', 'yes']
+        
+        # Ask about Cumination
+        console.print("\n[yellow]Would you like to install the Cumination addon?[/yellow]")
+        console.print("[red]WARNING: Cumination contains adult content (18+ only)[/red]")
+        console.print("Install Cumination? [y/N]: ", end="")
+        
+        try:
+            with open('/dev/tty', 'r') as tty:
+                response = tty.readline().strip().lower()
+        except:
+            response = console.input().strip().lower()
+        
+        install_cumination = response in ['y', 'yes']
+        
+        # Install selected addons
+        if install_umbrella or install_cumination:
+            self.install_selected_addons(install_umbrella, install_cumination)
+    
+    def install_rpi_mesa(self) -> bool:
+        """Install newest Mesa from Raspberry Pi unstable repo"""
+        try:
+            # Add RPi Foundation's official unstable repo
+            console.print("[cyan]Adding Raspberry Pi unstable repository...[/cyan]")
+            repo_content = "deb http://archive.raspberrypi.org/debian/ bookworm main\n"
+            with open("/etc/apt/sources.list.d/raspi.list", "w") as f:
+                f.write(repo_content)
+            
+            # Add the Raspberry Pi GPG key
+            console.print("[cyan]Adding Raspberry Pi GPG key...[/cyan]")
+            ret, _, err = run_command([
+                "bash", "-c",
+                "curl -fsSL https://archive.raspberrypi.org/debian/raspberrypi.gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/raspi.gpg"
+            ], timeout=30)
+            
+            if ret != 0:
+                logger.error(f"Failed to add GPG key: {err}")
+                return False
+            
+            # Pin Mesa packages to RPi repo
+            console.print("[cyan]Configuring package priorities...[/cyan]")
+            pin_content = """Package: libgl1-mesa-dri libglapi-mesa libgbm1 libegl1-mesa mesa-vulkan-drivers
+Pin: origin "archive.raspberrypi.org"
+Pin-Priority: 1001
+"""
+            with open("/etc/apt/preferences.d/99-raspi-mesa.pref", "w") as f:
+                f.write(pin_content)
+            
+            # Update package cache
+            console.print("[cyan]Updating package cache...[/cyan]")
+            ret, _, err = run_command(["apt-get", "update"], timeout=300)
+            if ret != 0:
+                logger.warning(f"Package update had issues: {err}")
+            
+            # Upgrade all packages to get latest from RPi repo
+            console.print("[cyan]Upgrading system packages...[/cyan]")
+            ret, _, err = run_command(["apt-get", "upgrade", "-y"], timeout=900)
+            if ret != 0:
+                logger.warning(f"Package upgrade had issues: {err}")
+            
+            # Install rpi-update tool
+            console.print("[cyan]Installing rpi-update tool...[/cyan]")
+            ret, _, err = run_command(["apt-get", "install", "-y", "rpi-update"], timeout=300)
+            if ret != 0:
+                logger.error(f"Failed to install rpi-update: {err}")
+                return False
+            
+            # Run rpi-update to get latest firmware
+            console.print("[cyan]Updating Raspberry Pi firmware...[/cyan]")
+            ret, _, err = run_command(["rpi-update"], timeout=600)
+            if ret != 0:
+                logger.warning(f"Firmware update had issues: {err}")
+            
+            # Install RPi-optimized Mesa stack
+            console.print("[cyan]Installing RPi-optimized Mesa drivers...[/cyan]")
+            mesa_packages = [
+                "libgl1-mesa-dri",
+                "libglapi-mesa",
+                "libgbm1",
+                "libegl1-mesa",
+                "mesa-vulkan-drivers"
+            ]
+            
+            ret, _, err = run_command(
+                ["apt-get", "install", "-y"] + mesa_packages,
+                timeout=600
+            )
+            
+            if ret != 0:
+                logger.error(f"Failed to install Mesa packages: {err}")
+                return False
+            
+            console.print("[green]RPi Mesa drivers and firmware updated successfully[/green]")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to install RPi Mesa: {e}")
+            return False
+    
+    def disable_systemd_networkd(self) -> bool:
+        """Disable systemd-networkd to prevent boot delays"""
+        try:
+            # Disable and mask systemd-networkd-wait-online
+            console.print("[cyan]Disabling systemd-networkd-wait-online...[/cyan]")
+            run_command(["systemctl", "disable", "systemd-networkd-wait-online.service"], timeout=10)
+            run_command(["systemctl", "mask", "systemd-networkd-wait-online.service"], timeout=10)
+            
+            # Disable and stop systemd-networkd
+            console.print("[cyan]Disabling systemd-networkd...[/cyan]")
+            run_command(["systemctl", "disable", "systemd-networkd"], timeout=10)
+            run_command(["systemctl", "stop", "systemd-networkd"], timeout=10)
+            
+            console.print("[green]Network services optimized for faster boot[/green]")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Failed to disable systemd-networkd: {e}")
+            return False
+    
+    def install_selected_addons(self, install_umbrella: bool, install_cumination: bool):
+        """Install selected addons"""
+        console.print("\n[green]Installing selected Kodi addons...[/green]")
+        
+        try:
+            from .media.addon_manager import AddonManager
+            addon_manager = AddonManager()
+            
+            # Install Umbrella if selected
+            if install_umbrella:
+                console.print("[cyan]Installing Umbrella Repository...[/cyan]")
+                success, message = addon_manager.install_repository("umbrella")
+                if success:
+                    console.print("[green]✓ Umbrella installed successfully[/green]")
+                else:
+                    console.print(f"[yellow]⚠ Umbrella installation failed: {message}[/yellow]")
+            
+            # Install Cumination if selected
+            if install_cumination:
+                console.print("[cyan]Installing Cumination Repository...[/cyan]")
+                success, message = addon_manager.install_repository("cumination")
+                if success:
+                    console.print("[green]✓ Cumination installed successfully[/green]")
+                else:
+                    console.print(f"[yellow]⚠ Cumination installation failed: {message}[/yellow]")
+            
+            console.print("\n[green]Addon installation complete![/green]")
+            console.print("[cyan]You can manage addons from: Media Services → Addon Repositories[/cyan]")
+            
+        except Exception as e:
+            logger.error(f"Failed to install addons: {e}")
+            console.print("[yellow]Failed to install some addons - you can install them later from the configurator[/yellow]")
     
     def finalize(self):
         """FINALIZE OVERKILL INSTALLATION"""
@@ -428,6 +607,13 @@ To cancel the installation, press CTRL+C at any time.
         
         console.print("[green]Setting final permissions...[/green]")
         run_command(["chown", "-R", "overkill:overkill", "/home/overkill"])
+        
+        # Install newest Mesa from Raspberry Pi unstable repo
+        console.print("[green]Installing latest Mesa drivers from Raspberry Pi repo...[/green]")
+        if self.install_rpi_mesa():
+            console.print("[green]Latest Mesa drivers installed[/green]")
+        else:
+            console.print("[yellow]Mesa installation failed - manual configuration may be needed[/yellow]")
         
         # Apply GPU configuration for V3D support
         console.print("[green]Configuring GPU for V3D support...[/green]")
