@@ -65,33 +65,38 @@ mkdir -p "${LOG_DIR}"
 
 # Starts a spinner animation for a background process
 start_spinner() {
-    (
+    {
         tput civis # Hide cursor
-        while :; do
+        while true; do
             for s in / - \\ \|; do
-                printf "\r${CYAN}  [%s]${NC} $1..." "$s"
+                printf "\r${CYAN}  [%s]${NC} %s..." "$s" "$1"
                 sleep 0.1
             done
         done
-    ) &
+    } &
     SPINNER_PID=$!
+    disown $SPINNER_PID  # Disown the process so it won't trigger EXIT trap
 }
 
 # Stops the spinner and displays the final result
 stop_spinner() {
+    local exit_code=$1
+    local desc="$2"
+    
     if [[ ${SPINNER_PID} -gt 0 ]]; then
-        kill ${SPINNER_PID} &>/dev/null
-        wait ${SPINNER_PID} &>/dev/null
-        SPINNER_PID=0  # Reset so cleanup doesn't try to kill it again
+        # Use SIGTERM which is gentler
+        kill -TERM ${SPINNER_PID} 2>/dev/null || true
+        SPINNER_PID=0
     fi
+    
     tput cnorm # Show cursor
     printf "\r\033[K" # Clear the line
 
-    if [[ $1 -eq 0 ]]; then
-        printf "${GREEN}  [✓]${NC} $2... Done\n"
+    if [[ ${exit_code} -eq 0 ]]; then
+        printf "${GREEN}  [✓]${NC} %s... Done\n" "$desc"
     else
-        printf "${RED}  [✗]${NC} $2... FAILED\n"
-        echo -e "${RED}    Error details are in the log file: $LOG_FILE${NC}"
+        printf "${RED}  [✗]${NC} %s... FAILED\n" "$desc"
+        echo -e "${RED}    Error details are in the log file: ${LOG_FILE}${NC}"
     fi
 }
 
@@ -99,17 +104,24 @@ stop_spinner() {
 run_task() {
     local desc="$1"
     local cmd="$2"
+    local exit_code=0
     
     start_spinner "$desc"
     
-    eval "$cmd" >> "$LOG_FILE" 2>&1
-    local exit_code=$?
-    
-    stop_spinner $exit_code "$desc"
-
-    if [[ $exit_code -ne 0 ]]; then
-        exit 1
+    # Run the command and capture exit code
+    if eval "$cmd" >> "${LOG_FILE}" 2>&1; then
+        exit_code=0
+    else
+        exit_code=$?
     fi
+    
+    stop_spinner ${exit_code} "$desc"
+
+    if [[ ${exit_code} -ne 0 ]]; then
+        return 1
+    fi
+    
+    return 0
 }
 
 show_banner() {
@@ -285,10 +297,21 @@ main() {
         error "Installation cancelled"
     fi
     
-    install_dependencies
-    setup_python_environment
-    install_overkill
-    create_launcher
+    if ! install_dependencies; then
+        error "Failed to install dependencies"
+    fi
+    
+    if ! setup_python_environment; then
+        error "Failed to setup Python environment"
+    fi
+    
+    if ! install_overkill; then
+        error "Failed to install OVERKILL"
+    fi
+    
+    if ! create_launcher; then
+        error "Failed to create launcher"
+    fi
     
     echo -e "\n${GREEN}✓ OVERKILL Bootstrap Complete!${NC}"
     echo -e "${CYAN}Run 'sudo overkill' to launch the configuration tool${NC}"
