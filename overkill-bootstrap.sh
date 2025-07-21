@@ -23,10 +23,19 @@ TEMP_DIR=""
 # Cleanup function
 cleanup() {
     local exit_code=$?
+    
+    # Kill any remaining spinner
+    if [[ ${SPINNER_PID} -gt 0 ]]; then
+        kill ${SPINNER_PID} &>/dev/null
+        wait ${SPINNER_PID} &>/dev/null
+        tput cnorm # Show cursor
+    fi
+    
     if [[ -n "${TEMP_DIR:-}" ]] && [[ -d "${TEMP_DIR}" ]]; then
         log "Cleaning up temporary files..."
         rm -rf "${TEMP_DIR}"
     fi
+    
     exit ${exit_code}
 }
 
@@ -70,8 +79,11 @@ start_spinner() {
 
 # Stops the spinner and displays the final result
 stop_spinner() {
-    kill $SPINNER_PID &>/dev/null
-    wait $SPINNER_PID &>/dev/null
+    if [[ ${SPINNER_PID} -gt 0 ]]; then
+        kill ${SPINNER_PID} &>/dev/null
+        wait ${SPINNER_PID} &>/dev/null
+        SPINNER_PID=0  # Reset so cleanup doesn't try to kill it again
+    fi
     tput cnorm # Show cursor
     printf "\r\033[K" # Clear the line
 
