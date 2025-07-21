@@ -369,12 +369,12 @@ To cancel the installation, press CTRL+C at any time.
         
         # Default to '2' if empty
         if not response:
-            response = '2'
+            response = '1'
         
         # Validate input
         if response not in ['1', '2']:
-            console.print(f"[yellow]Invalid choice '{response}'. Defaulting to skip (2).[/yellow]")
-            response = '2'
+            console.print(f"[yellow]Invalid choice '{response}'. Defaulting to skip (1).[/yellow]")
+            response = '1'
         
         if response == '1':
             builder = KodiBuilder()

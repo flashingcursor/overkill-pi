@@ -329,6 +329,39 @@ class KodiBuilder:
             except Exception as e:
                 logger.warning(f"Failed to create symlink {link}: {e}")
     
+    def create_initial_kodi_structure(self) -> bool:
+        """Create initial .kodi directory structure for overkill user"""
+        logger.info("Creating initial Kodi directory structure...")
+        
+        kodi_home = Path("/home/overkill/.kodi")
+        directories = [
+            kodi_home,
+            kodi_home / "addons",
+            kodi_home / "userdata",
+            kodi_home / "userdata" / "addon_data",
+            kodi_home / "temp"
+        ]
+        
+        try:
+            for directory in directories:
+                directory.mkdir(parents=True, exist_ok=True)
+            
+            # Set ownership to overkill user
+            import pwd
+            import grp
+            uid = pwd.getpwnam("overkill").pw_uid
+            gid = grp.getgrnam("overkill").gr_gid
+            
+            for directory in directories:
+                os.chown(directory, uid, gid)
+            
+            logger.info("Kodi directory structure created")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to create Kodi directory structure: {e}")
+            return False
+    
     def create_systemd_service(self) -> bool:
         """Create systemd service for Kodi"""
         service_content = """[Unit]
@@ -436,6 +469,10 @@ KODI_HOME=/opt/overkill/kodi/share/kodi \\
         
         # Create service
         if not self.create_systemd_service():
+            return False
+        
+        # Create initial Kodi directory structure
+        if not self.create_initial_kodi_structure():
             return False
         
         # Optimize
