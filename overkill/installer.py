@@ -418,6 +418,10 @@ To cancel the installation, press CTRL+C at any time.
                 progress.update(task, description="Creating systemd service...")
                 builder.create_systemd_service()
                 
+                # Create initial Kodi directory structure
+                progress.update(task, description="Creating Kodi user directories...")
+                builder.create_initial_kodi_structure()
+                
                 # Apply optimizations
                 progress.update(task, description="Applying Pi 5 optimizations...")
                 builder.optimize_for_pi5()
