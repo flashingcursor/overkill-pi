@@ -372,14 +372,14 @@ After=multi-user.target network.target sound.target
 Type=simple
 User=overkill
 Group=overkill
-# GPU access groups
-SupplementaryGroups=audio,video,input,render
+# NOTE: SupplementaryGroups removed due to systemd compatibility issues
+# The overkill user should be added to audio,video,input,render groups during installation
 Environment="HOME=/home/overkill"
 Environment="KODI_HOME=/opt/overkill/kodi/share/kodi"
 # Use GBM windowing for direct GPU access without X11
 Environment="WINDOWING=gbm"
-Environment="KODI_AE_SINK=ALSA"
-ExecStart=/opt/overkill/kodi/bin/kodi-standalone --windowing=gbm
+# Use command line switch instead of deprecated env variable
+ExecStart=/opt/overkill/kodi/bin/kodi-standalone --windowing=gbm --audio-backend=alsa
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=20
