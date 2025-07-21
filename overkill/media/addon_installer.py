@@ -84,10 +84,22 @@ class AddonInstaller:
     # Known repository URLs
     KNOWN_REPOS = {
         'repository.xbmc.org': 'https://mirrors.kodi.tv/addons/nexus',
-        'repository.umbrella': 'https://umbrellaplug.github.io/repository.umbrella',
-        'repository.ezra': 'https://ezra-hubbard.github.io/repository.ezra',
-        'repository.fenlight': 'https://tikipeter.github.io/repository.fenlight',
-        'repository.seren': 'https://nixgates.github.io/packages',
+        'repository.umbrella': 'https://umbrella-dev.github.io/repository.umbrella/',
+        'repository.cumination': 'https://kinkin-dev.github.io/repository.kinkin/',
+        'repository.fenlight': 'https://tikipeter.github.io/',
+        'repository.fenomscrapers': 'https://tikipeter.github.io/',
+        'repository.ezra': 'https://ezra-hubbard.github.io/repository.ezra/',
+        'repository.seren': 'https://nixgates.github.io/packages/',
+        'repository.thecrew': 'https://team-crew.github.io/',
+        'repository.numbers': 'https://lookingglass.rocks/addons/',
+        'repository.shadow': 'https://kodi.shadowcrew.info/',
+        'repository.risingtides': 'https://rising-tides.github.io/repo/',
+    }
+    
+    # Direct download URLs for repository ZIP files
+    REPO_ZIP_URLS = {
+        'repository.umbrella': 'https://umbrella-dev.github.io/repository.umbrella/repository.umbrella-1.0.0.zip',
+        'repository.cumination': 'https://kinkin-dev.github.io/repository.kinkin/repository.cumination-1.1.22.zip',
     }
     
     # Core Kodi modules to skip
@@ -217,6 +229,12 @@ class AddonInstaller:
             logger.info(f"Using cached file for {addon_id}")
             return cached_files[0]
         
+        # Check if we have a direct ZIP URL for this addon
+        if addon_id in self.REPO_ZIP_URLS:
+            zip_path = self._download_direct_zip(addon_id, self.REPO_ZIP_URLS[addon_id])
+            if zip_path:
+                return zip_path
+        
         # Try different sources
         if repo_url:
             zip_path = self._download_from_url(addon_id, repo_url)
@@ -234,8 +252,12 @@ class AddonInstaller:
     
     def _download_from_url(self, addon_id: str, repo_base: str) -> Optional[Path]:
         """Download from specific repository URL"""
+        # Ensure repo_base ends with /
+        if not repo_base.endswith('/'):
+            repo_base += '/'
+            
         # First, try to get addon.xml to determine version
-        addon_xml_url = f"{repo_base}/{addon_id}/addon.xml"
+        addon_xml_url = f"{repo_base}{addon_id}/addon.xml"
         
         try:
             logger.debug(f"Fetching addon.xml from {addon_xml_url}")
@@ -268,6 +290,34 @@ class AddonInstaller:
             logger.debug(f"Failed to download from {repo_base}: {e}")
         except Exception as e:
             logger.error(f"Download error: {e}")
+        
+        return None
+    
+    def _download_direct_zip(self, addon_id: str, zip_url: str) -> Optional[Path]:
+        """Download ZIP file directly from URL"""
+        try:
+            logger.info(f"Downloading {addon_id} from {zip_url}")
+            response = requests.get(zip_url, timeout=30, stream=True)
+            
+            if response.status_code == 200:
+                # Extract filename from URL or use default
+                filename = zip_url.split('/')[-1]
+                if not filename.endswith('.zip'):
+                    filename = f"{addon_id}.zip"
+                
+                zip_path = self.cache_dir / filename
+                
+                with open(zip_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                
+                logger.info(f"Downloaded {filename} ({zip_path.stat().st_size} bytes)")
+                return zip_path
+            else:
+                logger.error(f"Failed to download {zip_url}: HTTP {response.status_code}")
+                
+        except Exception as e:
+            logger.error(f"Direct download failed for {addon_id}: {e}")
         
         return None
     
