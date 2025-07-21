@@ -28,7 +28,7 @@ cleanup() {
     if [[ ${SPINNER_PID} -gt 0 ]]; then
         kill ${SPINNER_PID} &>/dev/null
         wait ${SPINNER_PID} &>/dev/null
-        tput cnorm # Show cursor
+        tput cnorm || true # Show cursor
     fi
     
     if [[ -n "${TEMP_DIR:-}" ]] && [[ -d "${TEMP_DIR}" ]]; then
@@ -66,7 +66,7 @@ mkdir -p "${LOG_DIR}"
 # Starts a spinner animation for a background process
 start_spinner() {
     {
-        tput civis # Hide cursor
+        tput civis || true # Hide cursor
         while true; do
             for s in / - \\ \|; do
                 printf "\r${CYAN}  [%s]${NC} %s..." "$s" "$1"
@@ -89,7 +89,7 @@ stop_spinner() {
         SPINNER_PID=0
     fi
     
-    tput cnorm # Show cursor
+    tput cnorm || true # Show cursor
     printf "\r\033[K" # Clear the line
 
     if [[ ${exit_code} -eq 0 ]]; then
@@ -281,14 +281,15 @@ EOF"
 main() {
     # Create temp directory
     TEMP_DIR=$(mktemp -d /tmp/overkill-install.XXXXXX)
-    log "Created temporary directory: ${TEMP_DIR}"
     
     clear
     show_banner
     
+    # Run pre-flight checks
     check_root
     check_system
     
+    # Confirm with the user
     echo -e "${CYAN}Ready to install OVERKILL Python Configurator?${NC}"
     local REPLY
     read -p "Continue? (y/N): " -n 1 -r REPLY </dev/tty
@@ -297,22 +298,14 @@ main() {
         error "Installation cancelled"
     fi
     
-    if ! install_dependencies; then
-        error "Failed to install dependencies"
-    fi
+    # --- Execute the installation as a chain ---
+    # The script will stop automatically if any step fails.
+    install_dependencies && \
+    setup_python_environment && \
+    install_overkill && \
+    create_launcher
     
-    if ! setup_python_environment; then
-        error "Failed to setup Python environment"
-    fi
-    
-    if ! install_overkill; then
-        error "Failed to install OVERKILL"
-    fi
-    
-    if ! create_launcher; then
-        error "Failed to create launcher"
-    fi
-    
+    # This success message only runs if the entire chain completes
     echo -e "\n${GREEN}✓ OVERKILL Bootstrap Complete!${NC}"
     echo -e "${CYAN}Run 'sudo overkill' to launch the configuration tool${NC}"
     
