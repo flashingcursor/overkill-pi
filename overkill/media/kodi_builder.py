@@ -152,42 +152,69 @@ class KodiBuilder:
         return latest_tag
     
     def clone_or_update_source(self, branch: Optional[str] = None) -> bool:
-        """Clone or update Kodi source code"""
+        """Clone or efficiently update the Kodi source code to a specific tag or branch."""
         ensure_directory(self.build_dir)
         
-        # If no branch specified, get latest release
-        if branch is None:
-            branch = self.get_latest_release_tag()
-            if branch is None:
-                branch = "master"
-                logger.warning("Using master branch as fallback")
+        # --- Step 1: Determine the target branch/tag ---
+        target_ref = branch
+        if target_ref is None:
+            logger.info("No specific version requested, finding latest stable release.")
+            target_ref = self.get_latest_release_tag()
+            if target_ref is None:
+                # Fallback if fetching the tag list fails
+                target_ref = "master"
+                logger.warning("Could not determine latest stable release, falling back to 'master' branch.")
         
-        if self.source_dir.exists():
-            logger.info("Updating existing Kodi source...")
-            # Fetch all tags first
-            ret, _, _ = run_command(["git", "fetch", "--tags"], cwd=self.source_dir)
-            
-            # Checkout the desired branch/tag
-            ret, _, err = run_command(["git", "checkout", branch], cwd=self.source_dir)
-            if ret != 0:
-                logger.error(f"Failed to checkout {branch}: {err}")
-                return False
-            
-            # Pull if it's a branch (not a tag)
-            if not branch.startswith(tuple(str(i) for i in range(10))):  # Not a version tag
-                ret, _, _ = run_command(["git", "pull"], cwd=self.source_dir)
-        else:
-            logger.info(f"Cloning Kodi source (branch/tag: {branch})...")
+        # --- Step 2: Handle cloning if the source directory does not exist ---
+        if not self.source_dir.exists():
+            logger.info(f"Cloning Kodi source (version: {target_ref})...")
+            # Perform a shallow clone of only the specific branch/tag. This is much faster.
             ret, _, err = run_command([
-                "git", "clone", "-b", branch, "--depth", "1",
-                self.kodi_repo, str(self.source_dir)
-            ], timeout=600)
-            
+                "git", "clone",
+                "--branch", target_ref,
+                "--single-branch",
+                "--depth", "1",
+                self.kodi_repo,
+                str(self.source_dir)
+            ], timeout=900)  # 15 minute timeout for initial clone
+
             if ret != 0:
-                logger.error(f"Failed to clone source: {err}")
+                logger.error(f"Failed to clone source for version {target_ref}: {err}")
                 return False
-        
-        return True
+            
+            logger.info("Kodi source cloned successfully.")
+            return True
+
+        # --- Step 3: Handle updating if the source directory already exists ---
+        logger.info(f"Kodi source found. Updating to version: {target_ref}...")
+        try:
+            # Fetch only the specific tag or branch we need. This is much faster than `fetch --tags`.
+            # The '|| true' helps prevent errors if the ref is already up-to-date.
+            run_command(["git", "fetch", "origin", target_ref, "--depth=1"], cwd=self.source_dir, timeout=120)
+
+            # Check out the desired tag or branch
+            ret, _, err = run_command(["git", "checkout", target_ref], cwd=self.source_dir, timeout=60)
+            if ret != 0:
+                logger.error(f"Failed to checkout version {target_ref}: {err}")
+                # Try to clean up and fetch again in case of a dirty state
+                run_command(["git", "reset", "--hard", f"origin/{target_ref}"], cwd=self.source_dir, timeout=60)
+                ret, _, err = run_command(["git", "checkout", target_ref], cwd=self.source_dir, timeout=60)
+                if ret != 0:
+                    logger.error(f"Retry checkout failed for version {target_ref}: {err}")
+                    return False
+
+            # If it's a branch (not a tag), we should pull the latest changes
+            # A simple check is to see if it's not a version number like "21.0-Omega"
+            if not target_ref.split('-')[0].replace('.', '').isdigit():
+                logger.info(f"'{target_ref}' is a branch, pulling latest changes...")
+                run_command(["git", "pull"], cwd=self.source_dir, timeout=120)
+            
+            logger.info(f"Kodi source successfully updated to {target_ref}.")
+            return True
+
+        except Exception as e:
+            logger.error(f"An unexpected error occurred while updating the source: {e}")
+            return False
     
     def check_libdisplay_info(self) -> bool:
         """Check if libdisplay-info is available"""
