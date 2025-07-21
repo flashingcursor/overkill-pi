@@ -32,7 +32,7 @@ class AddonManager:
         self.userdata = self.kodi_home / "userdata"
         self.temp_dir = Path("/tmp/overkill-addons")
         
-        # Define known repositories
+        # Define known repositories with base URLs (not direct ZIP URLs)
         self.repositories = {
             "umbrella": AddonRepository(
                 name="Umbrella Repository",
@@ -149,7 +149,7 @@ class AddonManager:
         return self.kodi_home.exists() and self.addons_dir.exists()
     
     def install_repository(self, repo_name: str) -> Tuple[bool, str]:
-        """Install a repository and its addons"""
+        """Install a repository and its addons using discovery-based approach"""
         if repo_name not in self.repositories:
             return False, f"Unknown repository: {repo_name}"
         
@@ -160,34 +160,31 @@ class AddonManager:
             from .addon_installer import AddonInstaller
             installer = AddonInstaller(self.kodi_home)
             
-            # Install repository addon first
-            repo_addon_id = f"repository.{repo_name}"
-            if repo_addon_id in repo.addons:
-                success = installer.install_addon(repo_addon_id, repo.url)
-                if not success:
-                    return False, f"Failed to install repository addon: {repo_addon_id}"
-            
-            # Install main addons from repository
-            installed = []
-            failed = []
-            
+            # Get the main addon ID (usually the video/audio plugin)
+            main_addon_id = None
             for addon_id in repo.addons:
-                if addon_id != repo_addon_id:  # Skip repository addon
-                    logger.info(f"Installing addon: {addon_id}")
-                    if installer.install_addon(addon_id, repo.url):
-                        installed.append(addon_id)
-                    else:
-                        failed.append(addon_id)
+                if addon_id.startswith("plugin."):
+                    main_addon_id = addon_id
+                    break
             
-            # Create sources entry
-            self._add_to_sources(repo)
+            if not main_addon_id:
+                # Fallback to first non-repository addon
+                for addon_id in repo.addons:
+                    if not addon_id.startswith("repository."):
+                        main_addon_id = addon_id
+                        break
             
-            if failed:
-                logger.warning(f"Failed to install some addons: {failed}")
-                return True, f"{repo.name} partially installed. Failed: {', '.join(failed)}"
-            else:
+            if not main_addon_id:
+                return False, "No installable addon found in repository"
+            
+            # Use the new discovery-based installation method
+            success = installer.install_addon_from_repo_url(main_addon_id, repo.url)
+            
+            if success:
                 logger.info(f"Successfully installed {repo.name}")
                 return True, f"{repo.name} installed successfully"
+            else:
+                return False, f"Failed to install {repo.name}"
             
         except Exception as e:
             logger.error(f"Failed to install repository: {e}")

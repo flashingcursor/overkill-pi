@@ -34,6 +34,8 @@ setup(
         "pyyaml>=6.0",
         "psutil>=5.9",
         "requests>=2.28",
+        "beautifulsoup4>=4.11",
+        "packaging>=21.0",
     ],
     extras_require={
         "dev": [

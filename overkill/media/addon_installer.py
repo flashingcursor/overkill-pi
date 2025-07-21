@@ -1,6 +1,7 @@
 """Kodi addon installer with dependency resolution"""
 
 import os
+import re
 import shutil
 import zipfile
 import sqlite3
@@ -10,6 +11,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+from packaging.version import parse as parse_version
+from bs4 import BeautifulSoup
 from ..core.logger import logger
 from ..core.utils import ensure_directory
 
@@ -128,6 +131,90 @@ class AddonInstaller:
         addon_path = self.addons_dir / addon_id
         return addon_path.exists() and (addon_path / 'addon.xml').exists()
     
+    def _discover_repository_zip_url(self, base_url: str) -> Optional[str]:
+        """Discover the latest repository ZIP URL from the base URL"""
+        logger.info(f"Discovering repository ZIP from {base_url}")
+        
+        try:
+            # Ensure base URL ends with /
+            if not base_url.endswith('/'):
+                base_url += '/'
+            
+            # Fetch the base URL content
+            response = requests.get(base_url, timeout=10)
+            response.raise_for_status()
+            
+            # Parse HTML to find repository ZIP links
+            soup = BeautifulSoup(response.text, 'html.parser')
+            
+            # Find all links that match repository.*.zip pattern
+            repo_zips = []
+            for link in soup.find_all('a', href=True):
+                href = link['href']
+                # Match repository.*.zip files
+                if re.match(r'^repository\.[^/]+\.zip$', href):
+                    repo_zips.append(href)
+            
+            # Also search in raw text for any missed links
+            text_matches = re.findall(r'repository\.[^/]+?-[\d.]+\.zip', response.text)
+            repo_zips.extend(text_matches)
+            
+            # Remove duplicates and filter valid versions
+            versioned_zips = {}
+            for zip_name in set(repo_zips):
+                # Extract version from filename (e.g., repository.umbrella-2.0.10.zip)
+                version_match = re.search(r'-([\d.]+)\.zip$', zip_name)
+                if version_match:
+                    version_str = version_match.group(1)
+                    try:
+                        version = parse_version(version_str)
+                        versioned_zips[version] = zip_name
+                    except:
+                        logger.debug(f"Could not parse version from {zip_name}")
+            
+            if not versioned_zips:
+                logger.warning("No versioned repository ZIPs found")
+                return None
+            
+            # Select the latest version
+            latest_version = max(versioned_zips.keys())
+            latest_zip = versioned_zips[latest_version]
+            
+            # Construct full URL
+            if latest_zip.startswith('http'):
+                full_url = latest_zip
+            else:
+                full_url = base_url + latest_zip
+            
+            logger.info(f"Found latest repository ZIP: {latest_zip} (version {latest_version})")
+            return full_url
+            
+        except Exception as e:
+            logger.error(f"Failed to discover repository ZIP: {e}")
+            return None
+    
+    def install_addon_from_repo_url(self, addon_id: str, repo_base_url: str) -> bool:
+        """Install addon from repository base URL (with discovery)"""
+        logger.info(f"Installing {addon_id} from repository at {repo_base_url}")
+        
+        # Step 0: Discover the repository ZIP URL
+        repo_zip_url = self._discover_repository_zip_url(repo_base_url)
+        if not repo_zip_url:
+            logger.error("Could not discover repository ZIP URL")
+            return False
+        
+        # Step 1: Install the repository
+        repo_addon_id = self._install_repository_from_zip(repo_zip_url)
+        if not repo_addon_id:
+            logger.error("Failed to install repository")
+            return False
+        
+        # Step 2: Load repository data
+        self._load_repository_data(repo_addon_id)
+        
+        # Step 3: Install the addon using the repository
+        return self.install_addon(addon_id, repo_base_url)
+    
     def install_addon(self, addon_id: str, repo_url: Optional[str] = None) -> bool:
         """Install addon with all dependencies"""
         logger.info(f"Starting installation of {addon_id}")
@@ -162,9 +249,8 @@ class AddonInstaller:
                 logger.error(f"Failed to install {current_id}")
                 return False
         
-        # Enable all installed addons in database
-        for addon_id in installed:
-            self._enable_addon_in_db(addon_id)
+        # Notify Kodi to scan for updates instead of direct DB manipulation
+        self._notify_kodi_scan()
         
         logger.info(f"Successfully installed {len(installed)} addon(s)")
         return True
@@ -345,51 +431,113 @@ class AddonInstaller:
         
         return None
     
-    def _enable_addon_in_db(self, addon_id: str):
-        """Enable addon in Kodi database"""
-        # Find the latest Addons database
-        db_pattern = 'Addons*.db'
-        db_files = list((self.kodi_home / 'userdata' / 'Database').glob(db_pattern))
+    def _install_repository_from_zip(self, repo_zip_url: str) -> Optional[str]:
+        """Install a repository from its ZIP URL"""
+        logger.info(f"Installing repository from {repo_zip_url}")
         
-        if not db_files:
-            logger.warning("No Kodi addon database found")
-            return
-        
-        # Use the latest version
-        db_path = max(db_files, key=lambda p: p.name)
+        temp_zip = self.temp_dir / "temp_repo.zip"
         
         try:
-            conn = sqlite3.connect(str(db_path))
-            cursor = conn.cursor()
+            # Download the repository ZIP
+            response = requests.get(repo_zip_url, timeout=30, stream=True)
+            response.raise_for_status()
             
-            # Check if addon exists in installed table
-            cursor.execute(
-                "SELECT * FROM installed WHERE addonID = ?",
-                (addon_id,)
-            )
+            # Save to temp file
+            with open(temp_zip, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    f.write(chunk)
             
-            if not cursor.fetchone():
-                # Insert as enabled
-                cursor.execute(
-                    "INSERT INTO installed (addonID, enabled) VALUES (?, 1)",
-                    (addon_id,)
-                )
-                logger.info(f"Enabled {addon_id} in database")
-            else:
-                # Update to enabled
-                cursor.execute(
-                    "UPDATE installed SET enabled = 1 WHERE addonID = ?",
-                    (addon_id,)
-                )
-                logger.info(f"Updated {addon_id} to enabled in database")
+            # Extract to addons directory
+            with zipfile.ZipFile(temp_zip, 'r') as zip_ref:
+                zip_ref.extractall(self.addons_dir)
             
-            conn.commit()
-            conn.close()
+            # Find the repository addon ID from the extracted files
+            for item in self.addons_dir.iterdir():
+                if item.is_dir() and item.name.startswith('repository.'):
+                    addon_xml = item / 'addon.xml'
+                    if addon_xml.exists():
+                        # Verify this is a repository addon
+                        tree = ET.parse(addon_xml)
+                        root = tree.getroot()
+                        if root.find('.//extension[@point="xbmc.addon.repository"]') is not None:
+                            repo_id = root.get('id')
+                            logger.info(f"Installed repository: {repo_id}")
+                            return repo_id
             
-        except sqlite3.Error as e:
-            logger.error(f"Database error enabling {addon_id}: {e}")
-            # Create marker file as fallback
-            self._create_enabled_marker(addon_id)
+            logger.error("No valid repository found in ZIP")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Failed to install repository: {e}")
+            return None
+        finally:
+            # Cleanup
+            if temp_zip.exists():
+                temp_zip.unlink()
+    
+    def _load_repository_data(self, repo_addon_id: str):
+        """Load repository metadata to find available addons"""
+        repo_path = self.addons_dir / repo_addon_id
+        if not repo_path.exists():
+            logger.error(f"Repository {repo_addon_id} not found")
+            return
+        
+        # Parse repository addon.xml to get the datadir URL
+        addon_xml = repo_path / 'addon.xml'
+        if not addon_xml.exists():
+            return
+        
+        try:
+            tree = ET.parse(addon_xml)
+            root = tree.getroot()
+            
+            # Find repository extension
+            repo_ext = root.find('.//extension[@point="xbmc.addon.repository"]')
+            if repo_ext is not None:
+                datadir = repo_ext.find('datadir')
+                if datadir is not None and datadir.text:
+                    # Store this repository's base URL for later use
+                    self.KNOWN_REPOS[repo_addon_id] = datadir.text.rstrip('/')
+                    logger.info(f"Loaded repository {repo_addon_id} with datadir: {datadir.text}")
+        except Exception as e:
+            logger.error(f"Failed to load repository data: {e}")
+    
+    def _notify_kodi_scan(self):
+        """Notify Kodi to scan for addon updates via JSON-RPC"""
+        logger.info("Notifying Kodi to scan for addon updates...")
+        
+        try:
+            # Try common Kodi JSON-RPC endpoints
+            kodi_hosts = [
+                "http://localhost:8080/jsonrpc",
+                "http://127.0.0.1:8080/jsonrpc",
+                "http://localhost:8090/jsonrpc"
+            ]
+            
+            payload = {
+                "jsonrpc": "2.0",
+                "method": "Addons.ScanForUpdates",
+                "id": 1
+            }
+            
+            for host in kodi_hosts:
+                try:
+                    response = requests.post(host, json=payload, timeout=5)
+                    if response.status_code == 200:
+                        logger.info(f"Successfully triggered Kodi addon scan at {host}")
+                        return
+                except:
+                    continue
+            
+            logger.info("Could not connect to Kodi JSON-RPC - addons will be detected on next Kodi start")
+            
+        except Exception as e:
+            logger.debug(f"Failed to notify Kodi: {e}")
+    
+    def _enable_addon_in_db(self, addon_id: str):
+        """[DEPRECATED] Direct database manipulation is unsafe and should not be used"""
+        logger.warning(f"Skipping direct database manipulation for {addon_id}")
+        # The addon will be enabled automatically when Kodi scans for it
     
     def _create_enabled_marker(self, addon_id: str):
         """Create enabled marker file as fallback"""
