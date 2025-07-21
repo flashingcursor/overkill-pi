@@ -50,6 +50,7 @@ class KodiBuilder:
         # Build dependencies
         self.build_deps = [
             "autoconf", "automake", "autopoint", "gettext", "autotools-dev",
+            "libtool", "libtool-bin",  # Added libtool for libdvdcss
             "cmake", "curl", "default-jre", "gawk", "gcc", "g++", "cpp", "pkg-config",
             "flatbuffers-compiler", "gdc", "gperf", "libasound2-dev",
             "libass-dev", "libavahi-client-dev", "libavahi-common-dev",
@@ -71,7 +72,7 @@ class KodiBuilder:
             "libxmu-dev", "libxrandr-dev", "libxslt1-dev", "libxt-dev",
             "lsb-release", "meson", "nasm", "ninja-build", "python3-dev",
             "python3-pil", "python3-pip", "rapidjson-dev", "swig", "unzip",
-            "uuid-dev", "vainfo", "wayland-protocols", "waylandpp-dev", "zip", "zlib1g-dev",
+            "uuid-dev", "libuuid1", "vainfo", "wayland-protocols", "waylandpp-dev", "zip", "zlib1g-dev",
             "libdisplay-info-dev"
         ]
     
